@@ -1,0 +1,1900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>World Forge</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root {
+    --bg: #0d0b08; --surface: #15120d; --surface2: #1e1912; --surface3: #26201a;
+    --border: #3a2f22; --border2: #4d3f2e;
+    --gold: #c9a84c; --gold2: #e8c97a; --gold3: #f5dfa0; --amber: #8b5e2a;
+    --text: #f5ede0; --text2: #d4bc96; --text3: #9a8a6e;
+    --red: #8b2a2a; --red2: #c05050;
+    --green: #2a5c3f; --green2: #4a9e6e;
+    --blue: #1e3a5c; --blue2: #4a80b8;
+    --purple: #3a2060; --purple2: #7a50c0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Crimson Pro', serif; font-size: 19px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  body::before { content: ''; position: fixed; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E"); pointer-events: none; z-index: 9999; opacity: 0.6; }
+
+  /* TOP BAR */
+  .topbar { display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .logo { font-family: 'Cinzel Decorative', serif; font-size: 20px; color: var(--gold); letter-spacing: 0.05em; text-shadow: 0 0 20px rgba(201,168,76,0.4); white-space: nowrap; }
+  .world-title-wrap { display: flex; align-items: center; gap: 10px; flex: 1; }
+  .world-title-label { font-family: 'Cinzel', serif; font-size: 11px; color: var(--text3); letter-spacing: 0.15em; text-transform: uppercase; }
+  #worldNameInput { background: transparent; border: none; border-bottom: 1px solid var(--border2); color: var(--gold2); font-family: 'Cinzel', serif; font-size: 16px; padding: 2px 6px; outline: none; width: 280px; transition: border-color 0.2s; }
+  #worldNameInput:focus { border-bottom-color: var(--gold); }
+  #worldNameInput::placeholder { color: var(--text3); font-style: italic; }
+  .topbar-actions { display: flex; gap: 8px; margin-left: auto; }
+
+  .btn { font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 0.1em; padding: 6px 14px; border: 1px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; transition: all 0.2s; text-transform: uppercase; }
+  .btn:hover { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.05); }
+  .btn-gold { background: var(--gold); color: var(--bg); border-color: var(--gold); }
+  .btn-gold:hover { background: var(--gold2); border-color: var(--gold2); color: var(--bg); }
+  .btn-danger { border-color: var(--red); color: var(--red2); }
+  .btn-danger:hover { background: rgba(139,42,42,0.2); }
+  .btn-drive { border-color: #2a6e3f; color: #5aab78; }
+  .btn-drive:hover { border-color: #5aab78; background: rgba(90,171,120,0.08); color: #7acc96; }
+  .btn-drive.syncing { opacity: 0.6; pointer-events: none; }
+
+  /* TOAST */
+  #toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--surface2); border: 1px solid var(--border2);
+    color: var(--text2); font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 0.1em;
+    padding: 10px 20px; z-index: 10000; opacity: 0; transition: all 0.3s; pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.toast-ok   { border-color: #5aab78; color: #7acc96; }
+  #toast.toast-err  { border-color: var(--red2); color: var(--red2); }
+  #toast.toast-info { border-color: var(--gold); color: var(--gold2); }
+
+  /* DRIVE STATUS dot */
+  .drive-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); display: inline-block; margin-right: 5px; transition: background 0.3s; flex-shrink: 0; }
+  .drive-dot.ok   { background: #5aab78; box-shadow: 0 0 6px rgba(90,171,120,0.6); }
+  .drive-dot.err  { background: var(--red2); }
+  .drive-dot.busy { background: var(--gold); animation: blink 0.7s infinite alternate; }
+  @keyframes blink { from { opacity:0.3; } to { opacity:1; } }
+
+  /* LAYOUT */
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  .sidebar { width: 260px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-section { border-bottom: 1px solid var(--border); }
+  .sidebar-section-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; user-select: none; }
+  .sidebar-section-title { font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text3); display: flex; align-items: center; gap: 8px; }
+  .section-icon { font-size: 13px; }
+  .sidebar-add-btn { width: 20px; height: 20px; border: 1px solid var(--border2); background: transparent; color: var(--text3); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+  .sidebar-add-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .sidebar-items { padding: 4px 0; overflow-y: auto; max-height: 200px; }
+  .sidebar-item { padding: 6px 16px 6px 32px; cursor: pointer; color: var(--text2); font-size: 16px; font-weight: 600; transition: all 0.15s; display: flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; overflow: hidden; }
+  .sidebar-item:hover { background: var(--surface2); color: var(--text); }
+  .sidebar-item.active { background: var(--surface2); color: var(--gold2); border-left: 2px solid var(--gold); padding-left: 30px; }
+  .item-name { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .item-delete { opacity: 0; background: transparent; border: none; color: var(--red2); cursor: pointer; font-size: 14px; padding: 2px; flex-shrink: 0; }
+  .sidebar-item:hover .item-delete { opacity: 0.5; }
+  .item-delete:hover { opacity: 1 !important; }
+  .sidebar-search { padding: 10px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .sidebar-search input { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'Crimson Pro', serif; font-size: 15px; font-weight: 600; padding: 5px 10px; outline: none; }
+  .sidebar-search input::placeholder { color: var(--text3); font-style: italic; }
+  .sidebar-scroll { overflow-y: auto; flex: 1; }
+
+  /* EDITOR AREA */
+  .editor-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+  .editor-header { padding: 16px 28px 0; border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+  .editor-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .entry-type-badge { font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; padding: 3px 8px; border: 1px solid; }
+  .badge-character { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.08); }
+  .badge-location  { border-color: var(--blue2); color: var(--blue2); background: rgba(74,128,184,0.08); }
+  .badge-lore      { border-color: var(--purple2); color: var(--purple2); background: rgba(122,80,192,0.08); }
+  .badge-story     { border-color: var(--green2); color: var(--green2); background: rgba(74,158,110,0.08); }
+  .badge-note      { border-color: var(--text3); color: var(--text3); background: rgba(122,106,82,0.08); }
+  .badge-map       { border-color: #b87c3c; color: #d4a060; background: rgba(184,124,60,0.08); }
+  .entry-title-input { background: transparent; border: none; color: var(--text); font-family: 'Cinzel', serif; font-size: 29px; font-weight: 600; outline: none; width: 100%; padding-bottom: 8px; letter-spacing: 0.02em; }
+  .entry-title-input::placeholder { color: var(--text3); }
+  .tags-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-bottom: 10px; }
+  .tag { font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 0.1em; padding: 2px 8px; background: var(--surface2); border: 1px solid var(--border); color: var(--text3); cursor: pointer; display: flex; align-items: center; gap: 4px; }
+  .tag-remove { cursor: pointer; color: var(--red2); font-size: 11px; }
+  .tag-add-input { background: transparent; border: none; border-bottom: 1px solid var(--border); color: var(--text2); font-family: 'Cinzel', serif; font-size: 10px; outline: none; width: 80px; padding: 2px 4px; }
+  .tag-add-input::placeholder { color: var(--text3); }
+
+  /* TEXT EDITOR */
+  .editor-body { flex: 1; overflow-y: auto; padding: 20px 28px 40px; }
+  .content-editor { background: transparent; border: none; color: var(--text); font-family: 'Crimson Pro', serif; font-size: 20px; line-height: 1.75; outline: none; width: 100%; min-height: 400px; resize: none; white-space: pre-wrap; font-weight: 400; }
+  .editor-toolbar { display: flex; align-items: center; gap: 4px; padding: 6px 28px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; flex-wrap: wrap; }
+  .toolbar-btn { background: transparent; border: 1px solid transparent; color: var(--text3); cursor: pointer; padding: 3px 8px; font-size: 13px; font-family: 'Cinzel', serif; transition: all 0.15s; letter-spacing: 0.05em; }
+  .toolbar-btn:hover { border-color: var(--border); color: var(--text2); background: var(--surface2); }
+  .toolbar-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+
+  /* EMPTY STATE */
+  .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--text3); padding: 40px; text-align: center; }
+  .empty-rune { font-family: 'Cinzel Decorative', serif; font-size: 64px; color: var(--border2); line-height: 1; text-shadow: 0 0 40px rgba(201,168,76,0.1); }
+  .empty-title { font-family: 'Cinzel', serif; font-size: 20px; color: var(--text); letter-spacing: 0.1em; }
+  .empty-sub { font-size: 17px; line-height: 1.6; max-width: 400px; font-style: italic; color: var(--text2); }
+  .quick-create { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+  .quick-btn { font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; padding: 8px 16px; border: 1px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+  .quick-btn:hover { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.05); }
+
+  /* STATUS BAR */
+  .status-bar { padding: 4px 28px; background: var(--surface); border-top: 1px solid var(--border); display: flex; gap: 16px; flex-shrink: 0; align-items: center; }
+  .status-item { font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 0.12em; color: var(--text3); text-transform: uppercase; }
+  .status-val { color: var(--text2); }
+
+  /* LINKED */
+  .linked-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .linked-title { font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--text3); margin-bottom: 10px; }
+  .linked-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .linked-tag { font-family: 'Cinzel', serif; font-size: 10px; padding: 3px 10px; background: var(--surface2); border: 1px solid var(--border); color: var(--text2); cursor: pointer; transition: all 0.15s; letter-spacing: 0.05em; }
+  .linked-tag:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(2px); }
+  .modal { background: var(--surface); border: 1px solid var(--border2); padding: 28px; width: 420px; max-width: 90vw; max-height: 90vh; overflow-y: auto; }
+  .modal-wide { width: 540px; }
+  .modal-title { font-family: 'Cinzel', serif; font-size: 16px; color: var(--gold); letter-spacing: 0.08em; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .modal-field { margin-bottom: 14px; }
+  .modal-label { font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--text3); display: block; margin-bottom: 6px; }
+  .modal-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'Crimson Pro', serif; font-size: 16px; padding: 8px 12px; outline: none; transition: border-color 0.2s; }
+  .modal-input:focus { border-color: var(--gold); }
+  .modal-textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'Crimson Pro', serif; font-size: 15px; padding: 8px 12px; outline: none; resize: vertical; min-height: 80px; line-height: 1.5; }
+  .modal-textarea:focus { border-color: var(--gold); }
+  .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .type-option { border: 1px solid var(--border); background: transparent; color: var(--text2); padding: 10px 12px; cursor: pointer; font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; transition: all 0.2s; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  .type-option .type-icon { font-size: 18px; }
+  .type-option:hover { border-color: var(--border2); color: var(--text); }
+  .type-option.selected { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.07); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* ═══════ MAP SYSTEM ═══════ */
+  .map-shell { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+  .map-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+  .map-tool-btn { font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 12px; border: 1px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .map-tool-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .map-tool-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.1); }
+
+  .map-viewport { flex: 1; overflow: hidden; position: relative; cursor: grab; background: #080604; }
+  .map-viewport.panning { cursor: grabbing; }
+  .map-viewport.pin-mode { cursor: crosshair; }
+  .map-canvas-wrap { position: absolute; transform-origin: 0 0; user-select: none; }
+  .map-image { display: block; max-width: none; pointer-events: none; }
+
+  /* UPLOAD ZONE */
+  .map-upload-zone { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; border: 2px dashed var(--border2); margin: 40px; color: var(--text3); transition: all 0.2s; cursor: default; }
+  .map-upload-zone.drag-over { border-color: var(--gold); background: rgba(201,168,76,0.05); color: var(--text2); }
+  .map-upload-icon { font-size: 48px; line-height: 1; pointer-events: none; }
+  .map-upload-title { font-family: 'Cinzel', serif; font-size: 16px; letter-spacing: 0.1em; pointer-events: none; }
+  .map-upload-sub { font-size: 14px; font-style: italic; text-align: center; pointer-events: none; }
+  .map-upload-btn { font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; padding: 8px 20px; border: 1px solid var(--gold); background: transparent; color: var(--gold); cursor: pointer; transition: all 0.2s; }
+  .map-upload-btn:hover { background: rgba(201,168,76,0.1); }
+
+  /* PINS */
+  .map-pin { position: absolute; transform: translate(-50%, -100%); cursor: pointer; z-index: 10; transition: transform 0.15s; }
+  .map-pin:hover { transform: translate(-50%, -100%) scale(1.2); z-index: 20; }
+  .map-pin:hover .pin-label { opacity: 1; }
+  .pin-icon { font-size: 22px; line-height: 1; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8)); }
+  .pin-label { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); background: rgba(13,11,8,0.93); border: 1px solid var(--border2); color: var(--text); font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.08em; padding: 3px 8px; white-space: nowrap; opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+  .map-pin.always-label .pin-label { opacity: 1; }
+  .map-pin.selected .pin-icon { filter: drop-shadow(0 0 6px var(--gold)) drop-shadow(0 2px 4px rgba(0,0,0,0.8)); }
+
+  /* PIN POPUP */
+  .pin-popup { position: absolute; background: var(--surface); border: 1px solid var(--border2); width: 280px; z-index: 100; box-shadow: 0 8px 32px rgba(0,0,0,0.6); animation: popIn 0.15s ease; }
+  @keyframes popIn { from { opacity:0; transform:scale(0.95) translateY(4px); } to { opacity:1; transform:scale(1) translateY(0); } }
+  .pin-popup-header { padding: 10px 14px; background: var(--surface2); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .pin-popup-title { font-family: 'Cinzel', serif; font-size: 13px; color: var(--gold2); letter-spacing: 0.05em; flex: 1; }
+  .pin-popup-close { background: transparent; border: none; color: var(--text3); cursor: pointer; font-size: 14px; padding: 2px; }
+  .pin-popup-close:hover { color: var(--text); }
+  .pin-popup-body { padding: 12px 14px; }
+  .pin-popup-desc { font-size: 15px; line-height: 1.55; color: var(--text2); margin-bottom: 10px; font-style: italic; }
+  .pin-popup-actions { display: flex; gap: 6px; }
+  .pin-popup-linked { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 4px; }
+  .pin-popup-link-tag { font-family: 'Cinzel', serif; font-size: 9px; padding: 2px 7px; background: var(--surface3); border: 1px solid var(--border); color: var(--text2); cursor: pointer; letter-spacing: 0.05em; }
+  .pin-popup-link-tag:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* MAP STATUS */
+  .map-status { padding: 5px 16px; background: var(--surface); border-top: 1px solid var(--border); display: flex; gap: 16px; align-items: center; flex-shrink: 0; }
+  .map-status-item { font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 0.12em; color: var(--text3); text-transform: uppercase; }
+
+  /* PIN ICON PICKER */
+  .pin-icon-grid { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .pin-icon-opt { width: 34px; height: 34px; border: 1px solid var(--border); background: transparent; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .pin-icon-opt:hover { border-color: var(--border2); background: var(--surface2); transform: scale(1.15); }
+  .pin-icon-opt.selected { border-color: var(--gold); background: rgba(201,168,76,0.1); }
+
+  .hidden { display: none !important; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--amber); }
+
+  /* LOGIN SCREEN */
+  #loginScreen {
+    position: fixed; inset: 0; z-index: 5000;
+    background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 24px;
+  }
+  #loginScreen::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 60%, rgba(201,168,76,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .login-logo {
+    font-family: 'Cinzel Decorative', serif; font-size: 36px; color: var(--gold);
+    letter-spacing: 0.05em; text-shadow: 0 0 40px rgba(201,168,76,0.5);
+  }
+  .login-sub {
+    font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 0.3em;
+    text-transform: uppercase; color: var(--text3); margin-top: -16px;
+  }
+  .login-divider { width: 120px; height: 1px; background: var(--border2); }
+  .login-prompt {
+    font-family: 'Crimson Pro', serif; font-size: 17px; color: var(--text2);
+    font-style: italic; text-align: center; max-width: 320px; line-height: 1.6;
+  }
+  .login-error {
+    font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--red2); text-align: center;
+  }
+
+  /* DRIVE FILE PICKER */
+  .drive-file-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border: 1px solid var(--border); margin-bottom: 6px;
+    cursor: pointer; transition: all 0.15s; background: var(--surface2);
+  }
+  .drive-file-item:hover { border-color: var(--gold); background: var(--surface3); }
+  .drive-file-name {
+    font-family: 'Cinzel', serif; font-size: 13px; color: var(--text);
+    letter-spacing: 0.05em;
+  }
+  .drive-file-meta {
+    font-family: 'Crimson Pro', serif; font-size: 13px; color: var(--text3);
+    font-style: italic;
+  }
+  .drive-picker-loading {
+    font-family: 'Crimson Pro', serif; font-size: 15px; color: var(--text3);
+    font-style: italic; text-align: center; padding: 20px;
+  }
+  .drive-picker-empty {
+    font-family: 'Crimson Pro', serif; font-size: 15px; color: var(--text3);
+    font-style: italic; text-align: center; padding: 20px;
+  }
+
+  /* ═══════ BOOKMARK PANEL ═══════ */
+  .editor-with-bookmarks { display: flex; flex: 1; overflow: hidden; }
+
+  .bookmark-panel {
+    width: 192px; flex-shrink: 0; background: var(--surface);
+    border-left: 1px solid var(--border); display: flex; flex-direction: column;
+    overflow: hidden; transition: width 0.2s;
+  }
+  .bookmark-panel.collapsed { width: 32px; }
+
+  .bookmark-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .bookmark-panel-title {
+    font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--text3); white-space: nowrap; overflow: hidden;
+  }
+  .bookmark-collapse-btn {
+    background: transparent; border: none; color: var(--text3); cursor: pointer;
+    font-size: 12px; padding: 0; flex-shrink: 0; transition: color 0.15s;
+  }
+  .bookmark-collapse-btn:hover { color: var(--gold); }
+
+  .bookmark-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+
+  .bookmark-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; cursor: pointer; transition: all 0.15s;
+    color: var(--text3); font-family: 'Cinzel', serif; font-size: 10px;
+    letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
+    overflow: hidden; position: relative; group: true;
+  }
+  .bookmark-item:hover { color: var(--gold2); background: var(--surface2); }
+  .bookmark-item.active { color: var(--gold); border-left: 2px solid var(--gold); padding-left: 10px; }
+
+  .bookmark-dot {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--border2);
+    flex-shrink: 0; transition: background 0.15s;
+  }
+  .bookmark-item:hover .bookmark-dot { background: var(--gold2); }
+  .bookmark-item.active .bookmark-dot { background: var(--gold); }
+
+  .bookmark-item-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+
+  .bookmark-item-del {
+    opacity: 0; background: transparent; border: none; color: var(--red2);
+    cursor: pointer; font-size: 11px; padding: 1px 3px; flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+  .bookmark-item:hover .bookmark-item-del { opacity: 0.6; }
+  .bookmark-item-del:hover { opacity: 1 !important; }
+
+  .bookmark-add-row {
+    padding: 8px 12px; border-top: 1px solid var(--border); flex-shrink: 0;
+    display: flex; gap: 4px; align-items: center;
+  }
+  .bookmark-add-input {
+    flex: 1; background: transparent; border: none;
+    border-bottom: 1px solid var(--border); color: var(--text2);
+    font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 0.08em;
+    outline: none; padding: 2px 2px; text-transform: uppercase;
+    min-width: 0;
+  }
+  .bookmark-add-input::placeholder { color: var(--text3); }
+  .bookmark-add-btn {
+    background: transparent; border: 1px solid var(--border2); color: var(--text3);
+    cursor: pointer; font-size: 13px; width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all 0.15s;
+  }
+  .bookmark-add-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* Section anchors in the editor */
+  .section-anchor {
+    display: block; margin: 28px 0 6px;
+    font-family: 'Cinzel', serif; font-size: 13px; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold);
+    border-bottom: 1px solid var(--border2); padding-bottom: 6px;
+    outline: none; cursor: text;
+  }
+  .section-anchor:first-child { margin-top: 4px; }
+
+  /* PORTRAIT / IMAGE GALLERY */
+  .editor-header-top { display: flex; gap: 16px; align-items: flex-start; }
+  .editor-header-main { flex: 1; min-width: 0; }
+
+  /* Gallery sits below the title/tags row, above the toolbar */
+  .gallery-bar {
+    display: none; /* shown via JS for character entries */
+    gap: 8px; align-items: center; flex-wrap: nowrap;
+    padding: 10px 28px; border-bottom: 1px solid var(--border);
+    background: var(--surface); overflow-x: auto; flex-shrink: 0;
+  }
+  .gallery-bar.visible { display: flex; }
+
+  .gallery-thumb {
+    position: relative; flex-shrink: 0;
+    width: 64px; height: 64px;
+    border: 1px solid var(--border2); background: var(--surface2);
+    cursor: pointer; overflow: hidden; transition: border-color 0.2s;
+  }
+  .gallery-thumb:hover { border-color: var(--gold); }
+  .gallery-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gallery-thumb .thumb-del {
+    position: absolute; top: 2px; right: 2px;
+    background: rgba(0,0,0,0.75); border: none; color: var(--red2);
+    cursor: pointer; font-size: 10px; padding: 1px 4px;
+    opacity: 0; transition: opacity 0.15s; z-index: 2;
+  }
+  .gallery-thumb:hover .thumb-del { opacity: 1; }
+  .gallery-thumb .thumb-caption {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,0.65); color: var(--text2);
+    font-family: 'Cinzel', serif; font-size: 7px; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 2px 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .gallery-thumb.gallery-primary { border-color: var(--gold); }
+  .gallery-thumb.gallery-primary::after {
+    content: '★'; position: absolute; top: 2px; left: 3px;
+    font-size: 9px; color: var(--gold); line-height: 1;
+  }
+
+  .gallery-add-btn {
+    width: 64px; height: 64px; flex-shrink: 0;
+    border: 1px dashed var(--border2); background: transparent;
+    color: var(--text3); cursor: pointer; font-size: 22px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; transition: all 0.2s;
+  }
+  .gallery-add-btn span { font-family: 'Cinzel', serif; font-size: 7px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .gallery-add-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* LIGHTBOX */
+  .lightbox {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.92);
+    z-index: 2000; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 12px;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+  .lightbox-img { max-width: 88vw; max-height: 78vh; object-fit: contain; border: 1px solid var(--border2); }
+  .lightbox-caption-input {
+    background: transparent; border: none; border-bottom: 1px solid var(--border2);
+    color: var(--text2); font-family: 'Crimson Pro', serif; font-size: 15px;
+    font-style: italic; text-align: center; outline: none; width: 320px; padding: 4px;
+  }
+  .lightbox-caption-input::placeholder { color: var(--text3); }
+  .lightbox-toolbar { display: flex; gap: 10px; align-items: center; }
+  .lightbox-close {
+    position: fixed; top: 20px; right: 24px;
+    background: transparent; border: none; color: var(--text2);
+    font-size: 28px; cursor: pointer; z-index: 2001; transition: color 0.15s;
+  }
+  .lightbox-close:hover { color: var(--gold); }
+  .lightbox-nav {
+    background: transparent; border: 1px solid var(--border2); color: var(--text2);
+    font-size: 18px; cursor: pointer; padding: 6px 14px; transition: all 0.15s;
+  }
+  .lightbox-nav:hover { border-color: var(--gold); color: var(--gold); }
+  .lightbox-counter { font-family: 'Cinzel', serif; font-size: 10px; color: var(--text3); letter-spacing: 0.1em; }
+  .lightbox-set-primary {
+    font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 4px 12px; border: 1px solid var(--border2); background: transparent;
+    color: var(--text3); cursor: pointer; transition: all 0.15s;
+  }
+  .lightbox-set-primary:hover { border-color: var(--gold); color: var(--gold); }
+  .lightbox-set-primary.is-primary { border-color: var(--gold); color: var(--gold); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-logo">⚔ WorldForge</div>
+  <div class="login-sub">Your World Awaits</div>
+  <div class="login-divider"></div>
+  <div class="login-prompt">Sign in with your Google account to enter.</div>
+  <div id="googleSignInBtn"></div>
+  <div class="login-error hidden" id="loginError">Access denied — this account is not authorised.</div>
+</div>
+
+<!-- APP -->
+<div class="topbar">
+  <div class="logo">⚔ WorldForge</div>
+  <div class="world-title-wrap">
+    <span class="world-title-label">World:</span>
+    <input type="text" id="worldNameInput" placeholder="Name your world…" autocomplete="off">
+  </div>
+  <div class="topbar-actions">
+    <button class="btn" onclick="exportData()">Export</button>
+    <button class="btn" onclick="importData()">Import</button>
+    <button class="btn btn-drive" id="driveLoadBtn" onclick="loadFromDrivePicker()" title="Load a world from Google Drive">📂 Load from Drive</button>
+    <button class="btn btn-drive" id="driveBtn" onclick="saveToDrive()" title="Save world to Google Drive">
+      <span class="drive-dot" id="driveDot"></span><span id="driveBtnLabel">Save to Drive</span>
+    </button>
+    <button class="btn btn-gold" onclick="openNewModal()">+ New Entry</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-search">
+      <input type="text" id="searchInput" placeholder="Search entries…" oninput="filterEntries(this.value)">
+    </div>
+    <div class="sidebar-scroll" id="sidebarScroll"></div>
+  </div>
+
+  <div class="editor-area" id="editorArea">
+
+    <!-- EMPTY STATE -->
+    <div class="empty-state" id="emptyState">
+      <div class="empty-rune">✦</div>
+      <div class="empty-title">The page is blank — your world awaits</div>
+      <div class="empty-sub">Begin forging your world by creating entries for characters, locations, lore, story outlines, annotated maps, or freeform notes.</div>
+      <div class="quick-create">
+        <button class="quick-btn" onclick="openNewModal('character')">⚔ Character</button>
+        <button class="quick-btn" onclick="openNewModal('location')">🗺 Location</button>
+        <button class="quick-btn" onclick="openNewModal('lore')">📜 Lore</button>
+        <button class="quick-btn" onclick="openNewModal('story')">📖 Story</button>
+        <button class="quick-btn" onclick="openNewModal('map')">🗺️ Map</button>
+        <button class="quick-btn" onclick="openNewModal('note')">✦ Note</button>
+      </div>
+    </div>
+
+    <!-- TEXT EDITOR SHELL -->
+    <div id="editorShell" class="hidden" style="display:flex;flex-direction:column;flex:1;overflow:hidden;">
+      <div class="editor-header">
+        <div class="editor-header-top">
+          <div class="editor-header-main">
+            <div class="editor-meta">
+              <span id="typeBadge" class="entry-type-badge"></span>
+              <input type="text" id="entryTitle" class="entry-title-input" placeholder="Entry title…" oninput="saveCurrentEntry()">
+            </div>
+            <div class="tags-row" id="tagsRow">
+              <input type="text" id="tagInput" class="tag-add-input" placeholder="+ tag" onkeydown="handleTagInput(event)">
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- IMAGE GALLERY BAR (character entries only) -->
+      <div class="gallery-bar" id="galleryBar">
+        <button class="gallery-add-btn" onclick="triggerGalleryUpload()" title="Add image">＋<span>Add Image</span></button>
+      </div>
+      <div class="editor-toolbar">
+        <button class="toolbar-btn" onclick="fmt('bold')"><b>B</b></button>
+        <button class="toolbar-btn" onclick="fmt('italic')"><i>I</i></button>
+        <button class="toolbar-btn" onclick="fmt('underline')"><u>U</u></button>
+        <div class="toolbar-sep"></div>
+        <button class="toolbar-btn" onclick="insertMd('## ')">H2</button>
+        <button class="toolbar-btn" onclick="insertMd('### ')">H3</button>
+        <div class="toolbar-sep"></div>
+        <button class="toolbar-btn" onclick="insertMd('• ')">• List</button>
+        <button class="toolbar-btn" onclick="insertRule()">― Rule</button>
+        <div class="toolbar-sep"></div>
+        <button class="toolbar-btn" onclick="insertMd('> ')">❝ Quote</button>
+      </div>
+      <div class="editor-with-bookmarks">
+        <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+          <div class="editor-body">
+            <div id="contentEditor" class="content-editor" contenteditable="true" data-placeholder="Write your entry here…" oninput="saveCurrentEntry();updateStatus();updateActiveBookmark()" onkeydown="handleEditorKey(event)" onscroll="updateActiveBookmark()"></div>
+            <div class="linked-section" id="linkedSection">
+              <div class="linked-title">Linked Entries</div>
+              <div class="linked-tags" id="linkedTags"></div>
+            </div>
+          </div>
+          <div class="status-bar">
+            <span class="status-item">Words: <span class="status-val" id="wordCount">0</span></span>
+            <span class="status-item">Characters: <span class="status-val" id="charCount">0</span></span>
+            <span class="status-item">Last saved: <span class="status-val" id="lastSaved">—</span></span>
+            <span class="status-item" style="margin-left:auto">
+              <button class="btn btn-danger" style="font-size:9px;padding:2px 8px" onclick="deleteCurrentEntry()">Delete Entry</button>
+            </span>
+          </div>
+        </div>
+        <!-- BOOKMARK PANEL -->
+        <div class="bookmark-panel" id="bookmarkPanel">
+          <div class="bookmark-panel-header">
+            <span class="bookmark-panel-title" id="bookmarkPanelTitle">Sections</span>
+            <button class="bookmark-collapse-btn" id="bookmarkCollapseBtn" onclick="toggleBookmarkPanel()" title="Collapse">◀</button>
+          </div>
+          <div class="bookmark-list" id="bookmarkList"></div>
+          <div class="bookmark-add-row" id="bookmarkAddRow">
+            <input type="text" class="bookmark-add-input" id="bookmarkAddInput" placeholder="New section…" onkeydown="handleBookmarkAdd(event)">
+            <button class="bookmark-add-btn" onclick="addBookmark()" title="Add section">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAP SHELL -->
+    <div id="mapShell" class="hidden map-shell">
+      <div class="editor-header">
+        <div class="editor-meta">
+          <span class="entry-type-badge badge-map">Map</span>
+          <input type="text" id="mapTitle" class="entry-title-input" placeholder="Map name…" oninput="saveMapEntry()">
+        </div>
+        <div class="tags-row" id="mapTagsRow">
+          <input type="text" id="mapTagInput" class="tag-add-input" placeholder="+ tag" onkeydown="handleMapTagInput(event)">
+        </div>
+      </div>
+      <div class="map-toolbar">
+        <button class="map-tool-btn active" id="toolPan" onclick="setMapTool('pan')">✋ Pan</button>
+        <button class="map-tool-btn" id="toolPin" onclick="setMapTool('pin')">📍 Add Pin</button>
+        <div class="toolbar-sep"></div>
+        <button class="map-tool-btn" onclick="zoomMap(1.25)">＋ Zoom In</button>
+        <button class="map-tool-btn" onclick="zoomMap(0.8)">－ Zoom Out</button>
+        <button class="map-tool-btn" onclick="resetMapView()">⊙ Fit to Screen</button>
+        <div class="toolbar-sep"></div>
+        <button class="map-tool-btn" onclick="triggerMapUpload()">🖼 Replace Image</button>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+          <span class="map-status-item">📍 <span id="pinCount">0</span> pins</span>
+          <button class="btn btn-danger" style="font-size:9px;padding:2px 8px" onclick="deleteCurrentEntry()">Delete Map</button>
+        </div>
+      </div>
+      <div class="map-viewport" id="mapViewport">
+        <div class="map-upload-zone" id="mapUploadZone">
+          <div class="map-upload-icon">🗺️</div>
+          <div class="map-upload-title">Upload Your Map</div>
+          <div class="map-upload-sub">Drag &amp; drop an image here, or click below<br>Supports PNG, JPG, WebP — perfect for Photoshop exports</div>
+          <button class="map-upload-btn" onclick="triggerMapUpload()">Choose Image File</button>
+        </div>
+        <div class="map-canvas-wrap" id="mapCanvasWrap" style="display:none">
+          <img class="map-image" id="mapImage" src="" alt="Map">
+        </div>
+      </div>
+      <div class="map-status">
+        <span class="map-status-item">Zoom: <span class="status-val" id="zoomLevel">100%</span></span>
+        <span style="margin-left:auto;font-family:'Crimson Pro',serif;font-size:13px;color:var(--text3);font-style:italic;" id="mapHint">Pan to explore · Switch to Pin mode to place annotations</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- NEW ENTRY MODAL -->
+<div class="modal-overlay hidden" id="newModal">
+  <div class="modal">
+    <div class="modal-title">Create New Entry</div>
+    <div class="modal-field">
+      <label class="modal-label">Entry Type</label>
+      <div class="type-grid" id="typeGrid">
+        <button class="type-option" data-type="character" onclick="selectType('character')"><span class="type-icon">⚔</span>Character</button>
+        <button class="type-option" data-type="location"  onclick="selectType('location')"><span class="type-icon">🗺</span>Location</button>
+        <button class="type-option" data-type="lore"      onclick="selectType('lore')"><span class="type-icon">📜</span>Lore &amp; History</button>
+        <button class="type-option" data-type="story"     onclick="selectType('story')"><span class="type-icon">📖</span>Story / Outline</button>
+        <button class="type-option" data-type="map"       onclick="selectType('map')"><span class="type-icon">🗺️</span>Map</button>
+        <button class="type-option" data-type="note"      onclick="selectType('note')"><span class="type-icon">✦</span>Free Note</button>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Title</label>
+      <input type="text" class="modal-input" id="newEntryTitle" placeholder="Give it a name…" onkeydown="if(event.key==='Enter')createEntry()">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="createEntry()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- PIN MODAL -->
+<div class="modal-overlay hidden" id="pinModal">
+  <div class="modal modal-wide">
+    <div class="modal-title" id="pinModalTitle">New Annotation</div>
+    <div class="modal-field">
+      <label class="modal-label">Name</label>
+      <input type="text" class="modal-input" id="pinNameInput" placeholder="e.g. The Sunken City, Dragon's Peak…">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Notes</label>
+      <textarea class="modal-textarea" id="pinDescInput" placeholder="History, secrets, what the party will find here…"></textarea>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Icon</label>
+      <div class="pin-icon-grid" id="pinIconGrid"></div>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Link to Entry</label>
+      <select class="modal-input" id="pinLinkSelect" style="font-family:'Cinzel',serif;font-size:12px;cursor:pointer;"></select>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="pinAlwaysLabel"> Always show label on map
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="pinDeleteBtn" onclick="deletePin()" style="display:none">Delete Pin</button>
+      <button class="btn" onclick="closePinModal()">Cancel</button>
+      <button class="btn btn-gold" onclick="savePin()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- DRIVE FILE PICKER MODAL -->
+<div class="modal-overlay hidden" id="drivePickerModal">
+  <div class="modal modal-wide">
+    <div class="modal-title">Load World from Google Drive</div>
+    <div id="driveFileList" style="min-height:80px;margin-bottom:4px;"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeDrivePickerModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="importFileInput" accept=".json" style="display:none" onchange="handleImport(event)">
+<input type="file" id="mapImageInput" accept="image/*" style="display:none" onchange="handleMapImageUpload(event)">
+<input type="file" id="galleryInput" accept="image/*" multiple style="display:none" onchange="handleGalleryUpload(event)">
+<div id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════
+let state = { worldName: '', entries: [], activeId: null, nextId: 1 };
+
+const TYPES = {
+  character: { label: 'Character', badge: 'badge-character', icon: '⚔',  placeholder: 'Describe this character — their appearance, personality, history, motivations, relationships…' },
+  location:  { label: 'Location',  badge: 'badge-location',  icon: '🗺',  placeholder: 'Describe this place — geography, atmosphere, history, inhabitants, secrets…' },
+  lore:      { label: 'Lore',      badge: 'badge-lore',      icon: '📜',  placeholder: 'Record the history, mythology, magic systems, cultures, or any lore of your world…' },
+  story:     { label: 'Story',     badge: 'badge-story',     icon: '📖',  placeholder: 'Outline chapters, arcs, plot threads, scenes, or any narrative structure…' },
+  map:       { label: 'Map',       badge: 'badge-map',       icon: '🗺️', placeholder: '' },
+  note:      { label: 'Note',      badge: 'badge-note',      icon: '✦',  placeholder: 'Anything else — ideas, questions, random sparks, things to develop later…' }
+};
+
+const PIN_ICONS = ['📍','🏰','⚔️','💀','🌿','💎','🔥','🌊','🏔️','⭐','🏚️','🗡️','🌑','🕌','🌲','❓','🐉','⚓','🌋','🏛️','🛡️','🌾','🕍','🗿'];
+
+let newModalType = 'character';
+let mapTool = 'pan';
+let mapScale = 1, mapOffsetX = 0, mapOffsetY = 0;
+let isPanning = false, panStartX = 0, panStartY = 0, panStartOffX = 0, panStartOffY = 0;
+let editingPinId = null, pendingPinX = null, pendingPinY = null;
+
+// ════════════════════════════════════════════
+// AUTH GATE
+// ════════════════════════════════════════════
+
+// ▼▼▼ ADD YOUR ALLOWED EMAIL ADDRESSES HERE ▼▼▼
+const ALLOWED_EMAILS = [
+  'wobblymermaid@gmail.com',
+  'velocitous.extramuralisation@gmail.com',
+];
+// ▲▲▲ ─────────────────────────────────────────
+
+const AUTH_CLIENT_ID = '1067334399721-u85hntlrriplj97pc1i1l6oebanlod54.apps.googleusercontent.com';
+let authedEmail = null;
+
+function initAuthGate() {
+  // Check if already signed in this session
+  const cached = sessionStorage.getItem('wf_authed_email');
+  if (cached && isEmailAllowed(cached)) {
+    authedEmail = cached;
+    grantAccess();
+    return;
+  }
+
+  // Render the Google Sign-In button
+  if (!window.google?.accounts?.id) {
+    // GIS not ready yet, retry shortly
+    setTimeout(initAuthGate, 300); return;
+  }
+
+  google.accounts.id.initialize({
+    client_id: AUTH_CLIENT_ID,
+    callback: handleAuthCredential,
+    ux_mode: 'popup',
+  });
+
+  google.accounts.id.renderButton(
+    document.getElementById('googleSignInBtn'),
+    { theme: 'filled_black', size: 'large', text: 'signin_with', shape: 'rectangular', width: 280 }
+  );
+}
+
+function handleAuthCredential(response) {
+  // Decode the JWT id_token to get email (no secret needed — it's just base64)
+  try {
+    const payload = JSON.parse(atob(response.credential.split('.')[1]));
+    const email = payload.email;
+    if (isEmailAllowed(email)) {
+      authedEmail = email;
+      sessionStorage.setItem('wf_authed_email', email);
+      grantAccess();
+    } else {
+      document.getElementById('loginError').classList.remove('hidden');
+      document.getElementById('loginError').textContent =
+        `Access denied: ${email} is not on the authorised list.`;
+    }
+  } catch(e) {
+    document.getElementById('loginError').classList.remove('hidden');
+    document.getElementById('loginError').textContent = 'Sign-in failed. Please try again.';
+  }
+}
+
+function isEmailAllowed(email) {
+  if (!email) return false;
+  // If whitelist is empty, deny everyone — owner must add at least one email
+  if (ALLOWED_EMAILS.length === 0) return false;
+  return ALLOWED_EMAILS.map(e => e.toLowerCase()).includes(email.toLowerCase());
+}
+
+function grantAccess() {
+  document.getElementById('loginScreen').remove();
+  init();
+  loadFromDriveOnStartup();
+  setTimeout(initGIS, 500);
+}
+
+// ════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════
+function init() {
+  const saved = localStorage.getItem('worldforge_v3');
+  if (saved) { try { state = JSON.parse(saved); } catch(e) {} }
+  document.getElementById('worldNameInput').value = state.worldName || '';
+  renderSidebar();
+  if (state.activeId) {
+    const e = state.entries.find(x => x.id === state.activeId);
+    if (e) openEntry(e.id);
+  }
+  initMapViewport();
+}
+
+function save() {
+  state.worldName = document.getElementById('worldNameInput').value;
+  localStorage.setItem('worldforge_v3', JSON.stringify(state));
+}
+
+// ════════════════════════════════════════════
+// SIDEBAR
+// ════════════════════════════════════════════
+function renderSidebar(filter = '') {
+  const scroll = document.getElementById('sidebarScroll');
+  scroll.innerHTML = '';
+  const q = filter.toLowerCase().trim();
+  ['character','location','lore','story','map','note'].forEach(type => {
+    const entries = state.entries.filter(e => {
+      if (e.type !== type) return false;
+      if (!q) return true;
+      return e.title.toLowerCase().includes(q) || (e.tags||[]).some(t => t.toLowerCase().includes(q));
+    });
+    const info = TYPES[type];
+    const section = document.createElement('div');
+    section.className = 'sidebar-section';
+    const hdr = document.createElement('div');
+    hdr.className = 'sidebar-section-header';
+    const plurals = { character:'Characters', location:'Locations', lore:'Lore', story:'Stories', map:'Maps', note:'Notes' };
+    hdr.innerHTML = `<span class="sidebar-section-title"><span class="section-icon">${info.icon}</span>${plurals[type]} <span style="color:var(--border2);margin-left:4px">${entries.length}</span></span>
+      <button class="sidebar-add-btn" onclick="event.stopPropagation();openNewModal('${type}')">+</button>`;
+    section.appendChild(hdr);
+    if (entries.length) {
+      const list = document.createElement('div');
+      list.className = 'sidebar-items';
+      entries.forEach(e => {
+        const item = document.createElement('div');
+        item.className = 'sidebar-item' + (e.id === state.activeId ? ' active' : '');
+        item.dataset.id = e.id;
+        item.innerHTML = `<span class="item-name">${escHtml(e.title||'(Untitled)')}</span>
+          <button class="item-delete" onclick="event.stopPropagation();deleteEntry(${e.id})">✕</button>`;
+        item.addEventListener('click', () => openEntry(e.id));
+        list.appendChild(item);
+      });
+      section.appendChild(list);
+    }
+    scroll.appendChild(section);
+  });
+}
+function filterEntries(q) { renderSidebar(q); }
+
+// ════════════════════════════════════════════
+// MODAL
+// ════════════════════════════════════════════
+function openNewModal(preselect) {
+  newModalType = preselect || 'character';
+  document.getElementById('newEntryTitle').value = '';
+  document.querySelectorAll('.type-option').forEach(b => b.classList.toggle('selected', b.dataset.type === newModalType));
+  document.getElementById('newModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('newEntryTitle').focus(), 50);
+}
+function closeModal() { document.getElementById('newModal').classList.add('hidden'); }
+function selectType(t) {
+  newModalType = t;
+  document.querySelectorAll('.type-option').forEach(b => b.classList.toggle('selected', b.dataset.type === t));
+}
+function createEntry() {
+  const title = document.getElementById('newEntryTitle').value.trim();
+  if (!title) { document.getElementById('newEntryTitle').focus(); return; }
+  const entry = { id: state.nextId++, type: newModalType, title, content: '', tags: [], created: Date.now(), modified: Date.now() };
+  if (newModalType === 'map') { entry.mapImage = null; entry.pins = []; entry.nextPinId = 1; }
+  state.entries.push(entry);
+  save(); closeModal(); renderSidebar(); openEntry(entry.id);
+}
+document.getElementById('newModal').addEventListener('click', function(e) { if (e.target===this) closeModal(); });
+
+// ════════════════════════════════════════════
+// OPEN / SWITCH ENTRY
+// ════════════════════════════════════════════
+function showShell(which) {
+  const shells = ['emptyState','editorShell','mapShell'];
+  shells.forEach(id => {
+    const el = document.getElementById(id);
+    if (id === which) { el.classList.remove('hidden'); if (id!=='emptyState') el.style.display='flex'; }
+    else { el.classList.add('hidden'); el.style.display=''; }
+  });
+}
+function openEntry(id) {
+  const entry = state.entries.find(e => e.id === id);
+  if (!entry) return;
+  state.activeId = id; save();
+  if (entry.type === 'map') {
+    showShell('mapShell');
+    document.getElementById('bookmarkPanel').style.display = 'none';
+    loadMapEntry(entry);
+  } else {
+    showShell('editorShell');
+    const info = TYPES[entry.type];
+    document.getElementById('typeBadge').textContent = info.label;
+    document.getElementById('typeBadge').className = 'entry-type-badge ' + info.badge;
+    document.getElementById('entryTitle').value = entry.title || '';
+    document.getElementById('contentEditor').innerHTML = entry.content || '';
+    document.getElementById('contentEditor').setAttribute('data-placeholder', info.placeholder);
+    renderTags(entry); renderLinked(entry); updateStatus();
+    renderBookmarkPanel(entry);
+    renderPortrait(entry);
+  }
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.toggle('active', parseInt(el.dataset.id) === id));
+}
+function saveCurrentEntry() {
+  const entry = state.entries.find(e => e.id === state.activeId);
+  if (!entry || entry.type === 'map') return;
+  entry.title = document.getElementById('entryTitle').value;
+  entry.content = document.getElementById('contentEditor').innerHTML;
+  entry.modified = Date.now(); save();
+  renderSidebar(document.getElementById('searchInput').value);
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.toggle('active', parseInt(el.dataset.id) === state.activeId));
+  document.getElementById('lastSaved').textContent = 'just now';
+  renderLinked(entry);
+}
+function deleteEntry(id) {
+  if (!confirm('Delete this entry?')) return;
+  state.entries = state.entries.filter(e => e.id !== id);
+  if (state.activeId === id) { state.activeId = null; showShell('emptyState'); }
+  save(); renderSidebar();
+}
+function deleteCurrentEntry() { if (state.activeId) deleteEntry(state.activeId); }
+
+// ════════════════════════════════════════════
+// TAGS (text entries)
+// ════════════════════════════════════════════
+function renderTags(entry) {
+  const row = document.getElementById('tagsRow');
+  row.querySelectorAll('.tag').forEach(t => t.remove());
+  const input = document.getElementById('tagInput');
+  (entry.tags||[]).forEach(tag => {
+    const el = document.createElement('span'); el.className = 'tag';
+    el.innerHTML = `${escHtml(tag)} <span class="tag-remove" onclick="removeTag('${escHtml(tag)}')">✕</span>`;
+    row.insertBefore(el, input);
+  });
+}
+function handleTagInput(e) {
+  if (e.key==='Enter'||e.key===',') {
+    e.preventDefault();
+    const val = e.target.value.replace(/,/g,'').trim(); if (!val) return;
+    const entry = state.entries.find(x => x.id===state.activeId); if (!entry) return;
+    if (!entry.tags) entry.tags=[];
+    if (!entry.tags.includes(val)) { entry.tags.push(val); save(); renderTags(entry); }
+    e.target.value='';
+  }
+}
+function removeTag(tag) {
+  const entry = state.entries.find(x => x.id===state.activeId); if (!entry) return;
+  entry.tags = (entry.tags||[]).filter(t => t!==tag); save(); renderTags(entry);
+}
+
+// Map tags
+function renderMapTags(entry) {
+  const row = document.getElementById('mapTagsRow');
+  row.querySelectorAll('.tag').forEach(t=>t.remove());
+  const input = document.getElementById('mapTagInput');
+  (entry.tags||[]).forEach(tag => {
+    const el = document.createElement('span'); el.className='tag';
+    el.innerHTML=`${escHtml(tag)} <span class="tag-remove" onclick="removeMapTag('${escHtml(tag)}')">✕</span>`;
+    row.insertBefore(el, input);
+  });
+}
+function handleMapTagInput(e) {
+  if (e.key==='Enter'||e.key===',') {
+    e.preventDefault();
+    const val=e.target.value.replace(/,/g,'').trim(); if(!val) return;
+    const entry=state.entries.find(x=>x.id===state.activeId); if(!entry) return;
+    if(!entry.tags) entry.tags=[];
+    if(!entry.tags.includes(val)){ entry.tags.push(val); save(); renderMapTags(entry); }
+    e.target.value='';
+  }
+}
+function removeMapTag(tag) {
+  const entry=state.entries.find(x=>x.id===state.activeId); if(!entry) return;
+  entry.tags=(entry.tags||[]).filter(t=>t!==tag); save(); renderMapTags(entry);
+}
+
+// ════════════════════════════════════════════
+// LINKED ENTRIES
+// ════════════════════════════════════════════
+function renderLinked(entry) {
+  const wrap = document.getElementById('linkedTags'); wrap.innerHTML='';
+  if (!entry.content) { document.getElementById('linkedSection').style.display='none'; return; }
+  const text = entry.content.replace(/<[^>]*>/g,' ').toLowerCase();
+  const linked = state.entries.filter(e => e.id!==entry.id && e.title && text.includes(e.title.toLowerCase()));
+  if (!linked.length) { document.getElementById('linkedSection').style.display='none'; return; }
+  document.getElementById('linkedSection').style.display='';
+  linked.forEach(e => {
+    const tag = document.createElement('span'); tag.className='linked-tag';
+    tag.textContent = TYPES[e.type].icon+' '+e.title; tag.onclick=()=>openEntry(e.id);
+    wrap.appendChild(tag);
+  });
+}
+
+// ════════════════════════════════════════════
+// TEXT EDITOR UTILS
+// ════════════════════════════════════════════
+function updateStatus() {
+  const text = document.getElementById('contentEditor').textContent||'';
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  document.getElementById('wordCount').textContent=words;
+  document.getElementById('charCount').textContent=text.length;
+}
+function fmt(cmd) { document.getElementById('contentEditor').focus(); document.execCommand(cmd,false,null); saveCurrentEntry(); }
+function insertMd(prefix) {
+  const editor = document.getElementById('contentEditor'); editor.focus();
+  const sel = window.getSelection();
+  if (sel.rangeCount) {
+    const range=sel.getRangeAt(0); const node=document.createTextNode(prefix);
+    range.insertNode(node); range.setStartAfter(node); range.setEndAfter(node);
+    sel.removeAllRanges(); sel.addRange(range);
+  }
+  saveCurrentEntry();
+}
+function insertRule() { document.getElementById('contentEditor').focus(); document.execCommand('insertHTML',false,'<hr style="border:none;border-top:1px solid var(--border2);margin:16px 0">'); saveCurrentEntry(); }
+function handleEditorKey(e) { if (e.key==='Tab') { e.preventDefault(); document.execCommand('insertText',false,'    '); } }
+
+// ════════════════════════════════════════════
+// EXPORT / IMPORT (local file)
+// ════════════════════════════════════════════
+function exportData() {
+  const blob = new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=(state.worldName||'world')+'_worldforge.json'; a.click();
+}
+function importData() { document.getElementById('importFileInput').click(); }
+function handleImport(e) {
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try {
+      const imported=JSON.parse(ev.target.result);
+      if (!imported.entries) throw new Error();
+      if (confirm(`Import "${imported.worldName||'this world'}"? This will replace your current world.`)) {
+        state=imported; save();
+        document.getElementById('worldNameInput').value=state.worldName||'';
+        state.activeId=null; showShell('emptyState'); renderSidebar();
+      }
+    } catch(err) { alert('Could not import file.'); }
+  };
+  reader.readAsText(file); e.target.value='';
+}
+
+// ════════════════════════════════════════════
+// GOOGLE DRIVE SYNC
+// ════════════════════════════════════════════
+const DRIVE_FILE_NAME = 'worldforge_save.json';
+const DRIVE_MIME      = 'application/json';
+let driveFileId = localStorage.getItem('worldforge_driveFileId') || null;
+let driveAccessToken = null;
+
+// ── Toast helper ──
+let toastTimer = null;
+function toast(msg, type='info', duration=3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show toast-'+type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{ el.className=''; }, duration);
+}
+
+// ── Drive status dot ──
+function setDriveStatus(status) {
+  // status: 'idle' | 'busy' | 'ok' | 'err'
+  const dot = document.getElementById('driveDot');
+  dot.className = 'drive-dot' + (status!=='idle' ? ' '+status : '');
+  const btn = document.getElementById('driveBtn');
+  btn.classList.toggle('syncing', status==='busy');
+}
+
+// ── Get a fresh access token via Google Identity Services ──
+let gisTokenClient = null;
+let gisResolve = null, gisReject = null;
+
+function initGIS() {
+  if (!window.google?.accounts?.oauth2) return;
+  gisTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: AUTH_CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/drive.file',
+    callback: (resp) => {
+      if (resp.error) {
+        if (gisReject) gisReject(new Error(resp.error));
+      } else {
+        sessionStorage.setItem('wf_gtoken', resp.access_token);
+        sessionStorage.setItem('wf_gtoken_exp', Date.now() + (resp.expires_in||3599)*1000 - 60000);
+        if (gisResolve) gisResolve(resp.access_token);
+      }
+      gisResolve = null; gisReject = null;
+    }
+  });
+}
+
+async function getDriveToken() {
+  const stored = sessionStorage.getItem('wf_gtoken');
+  const exp    = parseInt(sessionStorage.getItem('wf_gtoken_exp')||'0');
+  if (stored && Date.now() < exp) return stored;
+
+  // Lazy-init GIS
+  if (!gisTokenClient) initGIS();
+  if (!gisTokenClient) throw new Error('Google Identity Services not loaded yet — please try again in a moment.');
+
+  return new Promise((resolve, reject) => {
+    gisResolve = resolve;
+    gisReject  = reject;
+    gisTokenClient.requestAccessToken({ prompt: 'select_account' });
+  });
+}
+
+// ════════════════════════════════════════════
+// IMAGE GALLERY SYSTEM
+// ════════════════════════════════════════════
+let lightboxIndex = 0; // which image is open in lightbox
+
+function triggerGalleryUpload() { document.getElementById('galleryInput').click(); }
+
+function handleGalleryUpload(e) {
+  const files = Array.from(e.target.files); if (!files.length) return;
+  const entry = state.entries.find(x => x.id === state.activeId); if (!entry) return;
+  if (!entry.images) entry.images = [];
+  if (!entry.nextImageId) entry.nextImageId = 1;
+
+  let loaded = 0;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      entry.images.push({ id: entry.nextImageId++, src: ev.target.result, caption: '' });
+      loaded++;
+      if (loaded === files.length) { save(); renderGallery(entry); }
+    };
+    reader.readAsDataURL(file);
+  });
+  e.target.value = '';
+}
+
+function removeGalleryImage(imgId) {
+  const entry = state.entries.find(x => x.id === state.activeId); if (!entry) return;
+  entry.images = (entry.images||[]).filter(i => i.id !== imgId);
+  // If removed was primary, reset primary
+  if (entry.primaryImageId === imgId) delete entry.primaryImageId;
+  save(); renderGallery(entry);
+  closeLightbox();
+}
+
+function setPrimaryImage(imgId) {
+  const entry = state.entries.find(x => x.id === state.activeId); if (!entry) return;
+  entry.primaryImageId = imgId;
+  save(); renderGallery(entry);
+  // Update lightbox button
+  document.querySelectorAll('.lightbox-set-primary').forEach(b => {
+    b.classList.toggle('is-primary', parseInt(b.dataset.imgId) === imgId);
+    b.textContent = parseInt(b.dataset.imgId) === imgId ? '★ Primary Portrait' : 'Set as Primary';
+  });
+}
+
+function updateImageCaption(imgId, caption) {
+  const entry = state.entries.find(x => x.id === state.activeId); if (!entry) return;
+  const img = (entry.images||[]).find(i => i.id === imgId);
+  if (img) { img.caption = caption; save(); renderGallery(entry); }
+}
+
+function renderGallery(entry) {
+  const bar = document.getElementById('galleryBar');
+
+  if (entry.type !== 'character') { bar.classList.remove('visible'); return; }
+  bar.classList.add('visible');
+
+  // Remove existing thumbs, keep the add button
+  bar.querySelectorAll('.gallery-thumb').forEach(el => el.remove());
+  const addBtn = bar.querySelector('.gallery-add-btn');
+
+  (entry.images||[]).forEach((img, idx) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'gallery-thumb' + (img.id === entry.primaryImageId ? ' gallery-primary' : '');
+    thumb.innerHTML = `
+      <img src="${img.src}" alt="${escHtml(img.caption||'')}">
+      ${img.caption ? `<div class="thumb-caption">${escHtml(img.caption)}</div>` : ''}
+      <button class="thumb-del" onclick="event.stopPropagation();removeGalleryImage(${img.id})" title="Remove">✕</button>`;
+    thumb.addEventListener('click', () => openLightbox(entry, idx));
+    bar.insertBefore(thumb, addBtn);
+  });
+}
+
+// ── LIGHTBOX ──
+function openLightbox(entry, idx) {
+  closeLightbox();
+  lightboxIndex = idx;
+  const images = entry.images || [];
+  if (!images.length) return;
+
+  const lb = document.createElement('div');
+  lb.className = 'lightbox';
+  lb.id = 'lightbox';
+
+  const render = () => {
+    const img = images[lightboxIndex];
+    lb.innerHTML = `
+      <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+      <img class="lightbox-img" src="${img.src}" alt="${escHtml(img.caption||'')}">
+      <input class="lightbox-caption-input" type="text" value="${escHtml(img.caption||'')}"
+        placeholder="Add a caption…"
+        onchange="updateImageCaption(${img.id}, this.value); images[${lightboxIndex}].caption = this.value;">
+      <div class="lightbox-toolbar">
+        ${lightboxIndex > 0 ? `<button class="lightbox-nav" onclick="lightboxIndex--;renderLightboxContent()">◀</button>` : '<span style="width:48px"></span>'}
+        <span class="lightbox-counter">${lightboxIndex+1} / ${images.length}</span>
+        ${lightboxIndex < images.length-1 ? `<button class="lightbox-nav" onclick="lightboxIndex++;renderLightboxContent()">▶</button>` : '<span style="width:48px"></span>'}
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="lightbox-set-primary ${img.id === entry.primaryImageId ? 'is-primary' : ''}" data-img-id="${img.id}"
+          onclick="setPrimaryImage(${img.id})">
+          ${img.id === entry.primaryImageId ? '★ Primary Portrait' : 'Set as Primary'}
+        </button>
+        <button class="lightbox-set-primary" onclick="removeGalleryImage(${img.id})" style="border-color:var(--red);color:var(--red2)">Delete Image</button>
+      </div>`;
+  };
+
+  // Expose renderLightboxContent globally so inline onclick works
+  window.renderLightboxContent = () => {
+    const img = images[lightboxIndex];
+    lb.querySelector('.lightbox-img').src = img.src;
+    lb.querySelector('.lightbox-caption-input').value = img.caption||'';
+    lb.querySelector('.lightbox-counter').textContent = `${lightboxIndex+1} / ${images.length}`;
+    // Re-render nav
+    render();
+  };
+
+  render();
+  document.body.appendChild(lb);
+
+  // Close on backdrop click
+  lb.addEventListener('click', e => { if (e.target === lb) closeLightbox(); });
+
+  // Keyboard nav
+  window._lbKeyHandler = e => {
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'ArrowRight' && lightboxIndex < images.length-1) { lightboxIndex++; render(); }
+    if (e.key === 'ArrowLeft'  && lightboxIndex > 0)               { lightboxIndex--; render(); }
+  };
+  window.addEventListener('keydown', window._lbKeyHandler);
+}
+
+function closeLightbox() {
+  const lb = document.getElementById('lightbox');
+  if (lb) lb.remove();
+  if (window._lbKeyHandler) { window.removeEventListener('keydown', window._lbKeyHandler); delete window._lbKeyHandler; }
+}
+
+function renderPortrait(entry) {
+  // Now just delegates to gallery — kept for compatibility
+  renderGallery(entry);
+}
+
+// ── Find ALL json save files on Drive ──
+async function findAllDriveFiles(token) {
+  const r = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name+contains+'worldforge'+and+mimeType='application/json'+and+trashed=false&spaces=drive&fields=files(id,name,modifiedTime,size)&orderBy=modifiedTime+desc`,
+    { headers: { Authorization: 'Bearer '+token } }
+  );
+  const data = await r.json();
+  return data.files || [];
+}
+
+async function loadFromDrivePicker() {
+  document.getElementById('drivePickerModal').classList.remove('hidden');
+  const list = document.getElementById('driveFileList');
+  list.innerHTML = '<div class="drive-picker-loading">Searching Google Drive…</div>';
+
+  try {
+    const token = await getDriveToken();
+    const files = await findAllDriveFiles(token);
+
+    if (!files.length) {
+      list.innerHTML = '<div class="drive-picker-empty">No WorldForge save files found in your Google Drive.</div>';
+      return;
+    }
+
+    list.innerHTML = '';
+    files.forEach(file => {
+      const date = new Date(file.modifiedTime).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      const item = document.createElement('div');
+      item.className = 'drive-file-item';
+      item.innerHTML = `
+        <span class="drive-file-name">📄 ${escHtml(file.name)}</span>
+        <span class="drive-file-meta">Last modified ${date}</span>`;
+      item.addEventListener('click', () => loadDriveFileById(token, file.id, file.name));
+      list.appendChild(item);
+    });
+  } catch(err) {
+    list.innerHTML = `<div class="drive-picker-empty">Could not connect to Google Drive: ${escHtml(err.message)}</div>`;
+  }
+}
+
+async function loadDriveFileById(token, fileId, fileName) {
+  if (!confirm(`Load "${fileName}"? This will replace your current world.`)) return;
+  closeDrivePickerModal();
+  try {
+    setDriveStatus('busy');
+    const json = await downloadFromDrive(token, fileId);
+    const imported = JSON.parse(json);
+    if (!imported.entries) throw new Error('Not a valid WorldForge file.');
+    state = imported; save();
+    driveFileId = fileId;
+    localStorage.setItem('worldforge_driveFileId', fileId);
+    document.getElementById('worldNameInput').value = state.worldName || '';
+    state.activeId = null; showShell('emptyState'); renderSidebar();
+    setDriveStatus('ok');
+    toast(`Loaded "${fileName}" from Google Drive`, 'ok');
+    setTimeout(() => setDriveStatus('idle'), 3000);
+  } catch(err) {
+    setDriveStatus('err');
+    toast('Failed to load file: ' + err.message, 'err');
+    setTimeout(() => setDriveStatus('idle'), 4000);
+  }
+}
+
+function closeDrivePickerModal() {
+  document.getElementById('drivePickerModal').classList.add('hidden');
+}
+
+document.getElementById('drivePickerModal').addEventListener('click', function(e) {
+  if (e.target === this) closeDrivePickerModal();
+});
+
+// ── Find a single save file on Drive ──
+async function findDriveFile(token) {
+  const r = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FILE_NAME}'+and+trashed=false&spaces=drive&fields=files(id,name,modifiedTime)`,
+    { headers: { Authorization: 'Bearer '+token } }
+  );
+  const data = await r.json();
+  return data.files && data.files.length ? data.files[0] : null;
+}
+
+// ── Upload / update the save file ──
+async function uploadToDrive(token, json) {
+  const blob = new Blob([json], { type: DRIVE_MIME });
+  const meta = JSON.stringify({ name: DRIVE_FILE_NAME, mimeType: DRIVE_MIME });
+
+  if (driveFileId) {
+    // Update existing file
+    const form = new FormData();
+    form.append('metadata', new Blob([meta], {type:'application/json'}));
+    form.append('file', blob);
+    const r = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=multipart`,
+      { method:'PATCH', headers:{ Authorization:'Bearer '+token }, body:form }
+    );
+    return await r.json();
+  } else {
+    // Create new file
+    const form = new FormData();
+    form.append('metadata', new Blob([meta], {type:'application/json'}));
+    form.append('file', blob);
+    const r = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      { method:'POST', headers:{ Authorization:'Bearer '+token }, body:form }
+    );
+    const data = await r.json();
+    driveFileId = data.id;
+    localStorage.setItem('worldforge_driveFileId', driveFileId);
+    return data;
+  }
+}
+
+// ── Download from Drive ──
+async function downloadFromDrive(token, fileId) {
+  const r = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+    { headers: { Authorization: 'Bearer '+token } }
+  );
+  return await r.text();
+}
+
+// ── SAVE TO DRIVE (button handler) ──
+async function saveToDrive() {
+  setDriveStatus('busy');
+  document.getElementById('driveBtnLabel').textContent = 'Saving…';
+  try {
+    const token = await getDriveToken();
+    const json  = JSON.stringify(state, null, 2);
+    await uploadToDrive(token, json);
+    setDriveStatus('ok');
+    document.getElementById('driveBtnLabel').textContent = 'Saved ✓';
+    toast('World saved to Google Drive', 'ok');
+    setTimeout(()=>{ document.getElementById('driveBtnLabel').textContent='Save to Drive'; setDriveStatus('idle'); }, 3000);
+  } catch(err) {
+    setDriveStatus('err');
+    document.getElementById('driveBtnLabel').textContent = 'Save to Drive';
+    if (err.message === 'NO_CLIENT_ID') {
+      toast('Drive sync requires setup — see instructions below', 'err', 6000);
+      showDriveSetupNote();
+    } else {
+      toast('Drive save failed: ' + err.message, 'err');
+    }
+    setTimeout(()=>setDriveStatus('idle'), 4000);
+  }
+}
+
+// ── LOAD FROM DRIVE ON STARTUP ──
+async function loadFromDriveOnStartup() {
+  try {
+    setDriveStatus('busy');
+    // Always try to get a token silently first (non-interactive)
+    if (!gisTokenClient) initGIS();
+    if (!gisTokenClient) { setDriveStatus('idle'); return; }
+
+    // Request token without prompting — if user already granted access this session
+    // it will succeed silently; if not, skip (don't force a popup on startup)
+    const stored = sessionStorage.getItem('wf_gtoken');
+    const exp    = parseInt(sessionStorage.getItem('wf_gtoken_exp')||'0');
+    if (!stored || Date.now() >= exp) { setDriveStatus('idle'); return; }
+
+    const token = stored;
+    // Always search by name — works even if file was moved to a subfolder
+    const file = await findDriveFile(token);
+    if (file) {
+      driveFileId = file.id;
+      localStorage.setItem('worldforge_driveFileId', driveFileId);
+    } else if (driveFileId) {
+      // Try cached ID directly in case search missed it
+      try {
+        const r = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${driveFileId}?fields=id,name`,
+          { headers: { Authorization: 'Bearer '+token } }
+        );
+        if (!r.ok) driveFileId = null;
+      } catch(e) { driveFileId = null; }
+    }
+
+    if (!driveFileId) { setDriveStatus('idle'); return; }
+
+    const json = await downloadFromDrive(token, driveFileId);
+    const imported = JSON.parse(json);
+    if (imported.entries) {
+      state = imported; save();
+      document.getElementById('worldNameInput').value = state.worldName||'';
+      state.activeId = null; showShell('emptyState'); renderSidebar();
+      setDriveStatus('ok');
+      toast('World loaded from Google Drive', 'ok');
+      setTimeout(()=>setDriveStatus('idle'), 3000);
+    }
+  } catch(err) {
+    setDriveStatus('idle');
+  }
+}
+
+// ── Setup note for first-time Drive users ──
+function showDriveSetupNote() {
+  if (document.getElementById('driveSetupNote')) return;
+  const note = document.createElement('div');
+  note.id = 'driveSetupNote';
+  note.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border2);padding:20px 24px;z-index:10001;max-width:480px;font-size:14px;line-height:1.6;color:var(--text2);';
+  note.innerHTML = `<div style="font-family:'Cinzel',serif;font-size:13px;color:var(--gold);margin-bottom:10px;letter-spacing:0.08em;">Google Drive Setup</div>
+  <p>To enable Drive sync, this app needs a Google OAuth Client ID. Here's how to get one in ~3 minutes:</p>
+  <ol style="margin:10px 0 10px 16px;color:var(--text2);">
+    <li>Go to <a href="https://console.cloud.google.com" target="_blank" style="color:var(--gold2)">console.cloud.google.com</a></li>
+    <li>Create a project → Enable the <b>Google Drive API</b></li>
+    <li>Create an <b>OAuth 2.0 Client ID</b> (Web application type)</li>
+    <li>Add <code style="color:var(--gold2)">${window.location.href.split('?')[0]}</code> as an authorized JavaScript origin</li>
+    <li>Copy the Client ID and paste it into this file where it says <code style="color:var(--gold2)">const CLIENT_ID = ''</code></li>
+  </ol>
+  <p style="color:var(--text3);font-style:italic;font-size:13px;">In the meantime, use Export/Import for manual backups.</p>
+  <div style="margin-top:14px;text-align:right"><button onclick="this.closest('#driveSetupNote').remove()" style="font-family:'Cinzel',serif;font-size:10px;padding:5px 14px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;letter-spacing:0.1em;text-transform:uppercase">Dismiss</button></div>`;
+  document.body.appendChild(note);
+}
+
+// ════════════════════════════════════════════
+// ══════════ MAP SYSTEM ══════════════════════
+// ════════════════════════════════════════════
+
+function loadMapEntry(entry) {
+  document.getElementById('mapTitle').value = entry.title||'';
+  renderMapTags(entry);
+  const zone = document.getElementById('mapUploadZone');
+  const wrap = document.getElementById('mapCanvasWrap');
+  const img  = document.getElementById('mapImage');
+  if (entry.mapImage) {
+    zone.style.display='none'; wrap.style.display='block';
+    img.src=entry.mapImage;
+    img.onload=()=>{ resetMapView(); renderAllPins(entry); };
+  } else {
+    zone.style.display='flex'; wrap.style.display='none'; img.src='';
+    clearPinEls();
+  }
+  updatePinCount();
+}
+
+function saveMapEntry() {
+  const entry=state.entries.find(e=>e.id===state.activeId);
+  if (!entry||entry.type!=='map') return;
+  entry.title=document.getElementById('mapTitle').value; entry.modified=Date.now(); save();
+  renderSidebar(document.getElementById('searchInput').value);
+  document.querySelectorAll('.sidebar-item').forEach(el=>el.classList.toggle('active',parseInt(el.dataset.id)===state.activeId));
+}
+
+// ── UPLOAD ──
+function triggerMapUpload() { document.getElementById('mapImageInput').click(); }
+function handleMapImageUpload(e) {
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    const entry=state.entries.find(x=>x.id===state.activeId); if(!entry) return;
+    entry.mapImage=ev.target.result; if(!entry.pins) entry.pins=[]; save(); loadMapEntry(entry);
+  };
+  reader.readAsDataURL(file); e.target.value='';
+}
+
+// ── VIEWPORT: PAN & ZOOM ──
+function initMapViewport() {
+  const vp=document.getElementById('mapViewport');
+
+  vp.addEventListener('mousedown',e=>{
+    if (mapTool!=='pan'||e.button!==0) return;
+    isPanning=true; panStartX=e.clientX; panStartY=e.clientY;
+    panStartOffX=mapOffsetX; panStartOffY=mapOffsetY;
+    vp.classList.add('panning');
+  });
+  window.addEventListener('mousemove',e=>{
+    if (!isPanning) return;
+    mapOffsetX=panStartOffX+(e.clientX-panStartX);
+    mapOffsetY=panStartOffY+(e.clientY-panStartY);
+    applyTransform();
+  });
+  window.addEventListener('mouseup',()=>{ isPanning=false; document.getElementById('mapViewport').classList.remove('panning'); });
+
+  vp.addEventListener('wheel',e=>{
+    e.preventDefault();
+    const f=e.deltaY<0?1.1:0.9;
+    const r=vp.getBoundingClientRect();
+    const mx=e.clientX-r.left, my=e.clientY-r.top;
+    mapOffsetX=mx-(mx-mapOffsetX)*f; mapOffsetY=my-(my-mapOffsetY)*f;
+    mapScale=Math.min(Math.max(mapScale*f,0.05),12);
+    applyTransform(); updateZoomLabel();
+  },{passive:false});
+
+  // Drag-drop image
+  vp.addEventListener('dragover',e=>{ e.preventDefault(); document.getElementById('mapUploadZone').classList.add('drag-over'); });
+  vp.addEventListener('dragleave',()=>document.getElementById('mapUploadZone').classList.remove('drag-over'));
+  vp.addEventListener('drop',e=>{
+    e.preventDefault(); document.getElementById('mapUploadZone').classList.remove('drag-over');
+    const file=e.dataTransfer.files[0];
+    if (file&&file.type.startsWith('image/')) {
+      const reader=new FileReader();
+      reader.onload=ev=>{ const entry=state.entries.find(x=>x.id===state.activeId); if(!entry) return; entry.mapImage=ev.target.result; if(!entry.pins) entry.pins=[]; save(); loadMapEntry(entry); };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // Click to place pin
+  vp.addEventListener('click',e=>{
+    if (mapTool!=='pin') return;
+    const entry=state.entries.find(x=>x.id===state.activeId);
+    if (!entry||!entry.mapImage) return;
+    // Don't place pin if clicked on existing pin or popup
+    if (e.target.closest('.map-pin')||e.target.closest('.pin-popup')) return;
+    const r=vp.getBoundingClientRect();
+    pendingPinX=(e.clientX-r.left-mapOffsetX)/mapScale;
+    pendingPinY=(e.clientY-r.top -mapOffsetY)/mapScale;
+    editingPinId=null;
+    openPinModal(null);
+  });
+}
+
+function applyTransform() {
+  document.getElementById('mapCanvasWrap').style.transform=`translate(${mapOffsetX}px,${mapOffsetY}px) scale(${mapScale})`;
+}
+function updateZoomLabel() {
+  document.getElementById('zoomLevel').textContent=Math.round(mapScale*100)+'%';
+}
+function zoomMap(f) {
+  const vp=document.getElementById('mapViewport');
+  const cx=vp.clientWidth/2, cy=vp.clientHeight/2;
+  mapOffsetX=cx-(cx-mapOffsetX)*f; mapOffsetY=cy-(cy-mapOffsetY)*f;
+  mapScale=Math.min(Math.max(mapScale*f,0.05),12);
+  applyTransform(); updateZoomLabel();
+}
+function resetMapView() {
+  const vp=document.getElementById('mapViewport');
+  const img=document.getElementById('mapImage');
+  if (!img.naturalWidth) { mapScale=1; mapOffsetX=0; mapOffsetY=0; applyTransform(); updateZoomLabel(); return; }
+  const sx=vp.clientWidth/img.naturalWidth, sy=vp.clientHeight/img.naturalHeight;
+  mapScale=Math.min(sx,sy)*0.95;
+  mapOffsetX=(vp.clientWidth -img.naturalWidth *mapScale)/2;
+  mapOffsetY=(vp.clientHeight-img.naturalHeight*mapScale)/2;
+  applyTransform(); updateZoomLabel();
+  const entry=state.entries.find(x=>x.id===state.activeId);
+  if (entry) renderAllPins(entry);
+}
+function setMapTool(tool) {
+  mapTool=tool;
+  document.getElementById('toolPan').classList.toggle('active',tool==='pan');
+  document.getElementById('toolPin').classList.toggle('active',tool==='pin');
+  document.getElementById('mapViewport').classList.toggle('pin-mode',tool==='pin');
+  document.getElementById('mapHint').textContent = tool==='pin'
+    ? 'Click anywhere on the map to place a pin annotation'
+    : 'Pan to explore · Switch to Pin mode to place annotations';
+}
+
+// ── RENDER PINS ──
+function renderAllPins(entry) {
+  clearPinEls();
+  (entry.pins||[]).forEach(p=>renderPin(p));
+  updatePinCount();
+}
+function clearPinEls() {
+  document.querySelectorAll('.map-pin').forEach(el=>el.remove());
+  document.querySelector('.pin-popup')?.remove();
+}
+function renderPin(pin) {
+  const wrap=document.getElementById('mapCanvasWrap');
+  const el=document.createElement('div');
+  el.className='map-pin'+(pin.alwaysLabel?' always-label':'');
+  el.dataset.pinId=pin.id;
+  el.style.left=pin.x+'px'; el.style.top=pin.y+'px';
+  el.innerHTML=`<span class="pin-icon">${pin.icon||'📍'}</span><span class="pin-label">${escHtml(pin.name||'Pin')}</span>`;
+  el.addEventListener('click',e=>{ e.stopPropagation(); openPinPopup(pin,el); });
+  wrap.appendChild(el);
+}
+function updatePinCount() {
+  const entry=state.entries.find(x=>x.id===state.activeId);
+  document.getElementById('pinCount').textContent=(entry?.pins?.length)||0;
+}
+
+// ── PIN POPUP ──
+function openPinPopup(pin, pinEl) {
+  document.querySelector('.pin-popup')?.remove();
+  document.querySelectorAll('.map-pin').forEach(el=>el.classList.remove('selected'));
+  pinEl.classList.add('selected');
+
+  const popup=document.createElement('div');
+  popup.className='pin-popup';
+
+  const vp=document.getElementById('mapViewport');
+  const vpW=vp.clientWidth, vpH=vp.clientHeight;
+  const pinSX=pin.x*mapScale+mapOffsetX;
+  const pinSY=pin.y*mapScale+mapOffsetY;
+  let pl=pinSX+14, pt=pinSY-170;
+  if (pl+285>vpW) pl=pinSX-300;
+  if (pl<0) pl=8;
+  if (pt<0) pt=pinSY+14;
+  if (pt+200>vpH) pt=vpH-210;
+  popup.style.left=pl+'px'; popup.style.top=pt+'px';
+
+  let linkedHtml='';
+  if (pin.linkedEntryId) {
+    const le=state.entries.find(e=>e.id===pin.linkedEntryId);
+    if (le) linkedHtml=`<div class="pin-popup-linked"><span class="pin-popup-link-tag" onclick="openEntry(${le.id});document.querySelector('.pin-popup')?.remove()">${TYPES[le.type].icon} ${escHtml(le.title)}</span></div>`;
+  }
+
+  popup.innerHTML=`
+    <div class="pin-popup-header">
+      <span class="pin-popup-title">${pin.icon||'📍'} ${escHtml(pin.name||'Pin')}</span>
+      <button class="pin-popup-close" onclick="this.closest('.pin-popup').remove();document.querySelectorAll('.map-pin').forEach(e=>e.classList.remove('selected'))">✕</button>
+    </div>
+    <div class="pin-popup-body">
+      ${pin.description ? `<div class="pin-popup-desc">${escHtml(pin.description)}</div>` : ''}
+      ${linkedHtml}
+      <div class="pin-popup-actions">
+        <button class="btn" style="font-size:10px;padding:4px 10px" onclick="document.querySelector('.pin-popup').remove();editingPinId=${pin.id};openPinModal(${pin.id})">✏ Edit</button>
+        <button class="btn btn-danger" style="font-size:10px;padding:4px 10px" onclick="deletePinById(${pin.id})">✕ Delete</button>
+      </div>
+    </div>`;
+  vp.appendChild(popup);
+
+  setTimeout(()=>{
+    const close=e=>{
+      if (!popup.contains(e.target)&&!e.target.closest('.map-pin')) {
+        popup.remove();
+        document.querySelectorAll('.map-pin').forEach(el=>el.classList.remove('selected'));
+        window.removeEventListener('click',close);
+      }
+    };
+    window.addEventListener('click',close);
+  },10);
+}
+
+// ── PIN MODAL ──
+function openPinModal(pinId) {
+  const entry=state.entries.find(x=>x.id===state.activeId);
+  const pin=pinId!=null?(entry?.pins||[]).find(p=>p.id===pinId):null;
+
+  document.getElementById('pinModalTitle').textContent=pin?'Edit Annotation':'New Annotation';
+  document.getElementById('pinNameInput').value=pin?.name||'';
+  document.getElementById('pinDescInput').value=pin?.description||'';
+  document.getElementById('pinAlwaysLabel').checked=pin?.alwaysLabel||false;
+  document.getElementById('pinDeleteBtn').style.display=pin?'':'none';
+
+  // Icon grid
+  const grid=document.getElementById('pinIconGrid'); grid.innerHTML='';
+  const currentIcon=pin?.icon||'📍';
+  PIN_ICONS.forEach(ic=>{
+    const btn=document.createElement('button');
+    btn.className='pin-icon-opt'+(ic===currentIcon?' selected':'');
+    btn.textContent=ic; btn.title=ic;
+    btn.onclick=()=>{ grid.querySelectorAll('.pin-icon-opt').forEach(b=>b.classList.remove('selected')); btn.classList.add('selected'); };
+    grid.appendChild(btn);
+  });
+
+  // Linked entry select
+  const sel=document.getElementById('pinLinkSelect');
+  sel.innerHTML='<option value="">— no linked entry —</option>';
+  state.entries.filter(e=>e.type!=='map').forEach(e=>{
+    const opt=document.createElement('option');
+    opt.value=e.id; opt.textContent=TYPES[e.type].icon+' '+e.title;
+    if (pin?.linkedEntryId===e.id) opt.selected=true;
+    sel.appendChild(opt);
+  });
+
+  document.getElementById('pinModal').classList.remove('hidden');
+  setTimeout(()=>document.getElementById('pinNameInput').focus(),50);
+}
+function closePinModal() {
+  document.getElementById('pinModal').classList.add('hidden');
+  editingPinId=null; pendingPinX=null; pendingPinY=null;
+}
+function savePin() {
+  const entry=state.entries.find(x=>x.id===state.activeId); if(!entry) return;
+  if (!entry.pins) entry.pins=[];
+  const name=document.getElementById('pinNameInput').value.trim()||'Unnamed';
+  const desc=document.getElementById('pinDescInput').value.trim();
+  const icon=document.getElementById('pinIconGrid').querySelector('.selected')?.textContent||'📍';
+  const alwaysLabel=document.getElementById('pinAlwaysLabel').checked;
+  const lv=document.getElementById('pinLinkSelect').value;
+  const linkedEntryId=lv?parseInt(lv):null;
+  if (editingPinId!=null) {
+    const p=entry.pins.find(p=>p.id===editingPinId);
+    if (p) { p.name=name; p.description=desc; p.icon=icon; p.alwaysLabel=alwaysLabel; p.linkedEntryId=linkedEntryId; }
+  } else {
+    entry.pins.push({id:entry.nextPinId++, x:pendingPinX, y:pendingPinY, name, description:desc, icon, alwaysLabel, linkedEntryId});
+  }
+  save(); closePinModal(); renderAllPins(entry);
+}
+function deletePin() { if (editingPinId!=null) { deletePinById(editingPinId); closePinModal(); } }
+function deletePinById(pinId) {
+  const entry=state.entries.find(x=>x.id===state.activeId); if(!entry) return;
+  entry.pins=(entry.pins||[]).filter(p=>p.id!==pinId);
+  save(); closePinModal(); renderAllPins(entry); document.querySelector('.pin-popup')?.remove();
+}
+document.getElementById('pinModal').addEventListener('click',function(e){ if(e.target===this) closePinModal(); });
+
+// ════════════════════════════════════════════
+// BOOKMARK / SECTION SYSTEM
+// ════════════════════════════════════════════
+const DEFAULT_BOOKMARKS = {
+  character: ['Appearance', 'Personality', 'Skills & Abilities', 'History', 'Relationships', 'Goals & Motivations'],
+  location:  ['Overview', 'Geography', 'History', 'Inhabitants', 'Culture', 'Secrets'],
+  lore:      ['Overview', 'Origins', 'Key Figures', 'Timeline', 'Impact'],
+  story:     ['Synopsis', 'Act I', 'Act II', 'Act III', 'Themes', 'Notes'],
+  note:      [],
+  map:       []
+};
+
+let bookmarkPanelCollapsed = false;
+
+function getBookmarks(entry) {
+  if (!entry.bookmarks) {
+    // Seed with defaults for this type
+    entry.bookmarks = (DEFAULT_BOOKMARKS[entry.type] || []).map((name, i) => ({ id: i+1, name }));
+    entry.nextBookmarkId = entry.bookmarks.length + 1;
+  }
+  return entry.bookmarks;
+}
+
+function renderBookmarkPanel(entry) {
+  const panel = document.getElementById('bookmarkPanel');
+  const list  = document.getElementById('bookmarkList');
+  const addRow = document.getElementById('bookmarkAddRow');
+  list.innerHTML = '';
+
+  const bookmarks = getBookmarks(entry);
+
+  if (entry.type === 'note' || entry.type === 'map') {
+    panel.style.display = 'none'; return;
+  }
+  panel.style.display = 'flex';
+
+  if (bookmarkPanelCollapsed) {
+    panel.classList.add('collapsed');
+    document.getElementById('bookmarkPanelTitle').style.display = 'none';
+    document.getElementById('bookmarkCollapseBtn').textContent = '▶';
+    addRow.style.display = 'none';
+    return;
+  }
+  panel.classList.remove('collapsed');
+  document.getElementById('bookmarkPanelTitle').style.display = '';
+  document.getElementById('bookmarkCollapseBtn').textContent = '◀';
+  addRow.style.display = 'flex';
+
+  bookmarks.forEach(bm => {
+    const item = document.createElement('div');
+    item.className = 'bookmark-item';
+    item.dataset.bmId = bm.id;
+    item.innerHTML = `<span class="bookmark-dot"></span>
+      <span class="bookmark-item-label">${escHtml(bm.name)}</span>
+      <button class="bookmark-item-del" onclick="event.stopPropagation();removeBookmark(${bm.id})" title="Remove">✕</button>`;
+    item.addEventListener('click', () => jumpToBookmark(bm.id));
+    list.appendChild(item);
+  });
+
+  updateActiveBookmark();
+}
+
+function addBookmark() {
+  const input = document.getElementById('bookmarkAddInput');
+  const name = input.value.trim(); if (!name) return;
+  const entry = state.entries.find(x => x.id === state.activeId); if (!entry) return;
+  const bookmarks = getBookmarks(entry);
+  const id = entry.nextBookmarkId++;
+  bookmarks.push({ id, name });
+  input.value = '';
+  save();
+  // Insert anchor into editor
+  insertSectionAnchor(id, name);
+  renderBookmarkPanel(entry);
+}
+
+function handleBookmarkAdd(e) {
+  if (e.key === 'Enter') { e.preventDefault(); addBookmark(); }
+}
+
+function removeBookmark(bmId) {
+  const entry = state.entries.find(x => x.id === state.activeId); if (!entry) return;
+  entry.bookmarks = (entry.bookmarks||[]).filter(b => b.id !== bmId);
+  // Remove anchor from editor DOM
+  const editor = document.getElementById('contentEditor');
+  const anchor = editor.querySelector(`[data-bm="${bmId}"]`);
+  if (anchor) anchor.remove();
+  saveCurrentEntry(); renderBookmarkPanel(entry);
+}
+
+function insertSectionAnchor(id, name) {
+  const editor = document.getElementById('contentEditor');
+  editor.focus();
+  // Insert at end
+  const anchor = document.createElement('div');
+  anchor.className = 'section-anchor';
+  anchor.dataset.bm = id;
+  anchor.contentEditable = 'false';
+  anchor.textContent = name;
+  editor.appendChild(anchor);
+  // Add a paragraph after for writing
+  const p = document.createElement('p');
+  p.innerHTML = '<br>';
+  editor.appendChild(p);
+  // Move cursor to new paragraph
+  const range = document.createRange();
+  range.setStart(p, 0); range.collapse(true);
+  const sel = window.getSelection();
+  sel.removeAllRanges(); sel.addRange(range);
+  p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  saveCurrentEntry();
+}
+
+function jumpToBookmark(bmId) {
+  const editor = document.getElementById('contentEditor');
+  const anchor = editor.querySelector(`[data-bm="${bmId}"]`);
+  if (anchor) {
+    anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    // Anchor not yet in document — insert it
+    const entry = state.entries.find(x => x.id === state.activeId); if (!entry) return;
+    const bm = (entry.bookmarks||[]).find(b => b.id === bmId); if (!bm) return;
+    insertSectionAnchor(bmId, bm.name);
+  }
+}
+
+function updateActiveBookmark() {
+  const editor = document.getElementById('contentEditor');
+  const editorBody = editor.closest('.editor-body');
+  if (!editorBody) return;
+  const scrollTop = editorBody.scrollTop;
+  const anchors = editor.querySelectorAll('.section-anchor');
+  let activeId = null;
+  anchors.forEach(a => {
+    if (a.offsetTop - editorBody.scrollTop <= 60) activeId = parseInt(a.dataset.bm);
+  });
+  document.querySelectorAll('.bookmark-item').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.bmId) === activeId);
+  });
+}
+
+function syncAnchorsFromContent(entry) {
+  // After loading content, ensure anchors match bookmarks list
+  // (they're stored in the HTML content, so they come back automatically)
+}
+
+function toggleBookmarkPanel() {
+  bookmarkPanelCollapsed = !bookmarkPanelCollapsed;
+  const entry = state.entries.find(x => x.id === state.activeId);
+  if (entry) renderBookmarkPanel(entry);
+}
+
+// ════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+document.getElementById('worldNameInput').addEventListener('input',save);
+
+const style=document.createElement('style');
+style.textContent=`[contenteditable]:empty:before{content:attr(data-placeholder);color:var(--text3);font-style:italic;pointer-events:none}`;
+document.head.appendChild(style);
+
+// Boot: wait for DOM + GIS script, then start auth gate
+window.addEventListener('load', () => initAuthGate());
+</script>
+</body>
+</html>
