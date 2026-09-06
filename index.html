@@ -213,6 +213,62 @@
   ::-webkit-scrollbar-thumb { background: var(--border2); }
   ::-webkit-scrollbar-thumb:hover { background: var(--amber); }
 
+  /* SIDEBAR DRAWER (mobile) — hidden elements on desktop */
+  .sidebar-toggle-btn { display: none; flex-shrink: 0; }
+  .sidebar-backdrop { display: none; }
+
+  /* MOBILE LAYOUT */
+  @media (max-width: 760px) {
+    .sidebar-toggle-btn { display: inline-flex; }
+    .topbar { padding: 10px 12px; gap: 8px; }
+    .logo { font-size: 15px; }
+    .world-title-wrap { flex: 1 1 auto; min-width: 0; }
+    #worldNameInput { width: 100%; min-width: 60px; font-size: 13px; }
+    .world-title-label { display: none; }
+    .topbar-actions { gap: 4px; }
+    .topbar-actions .btn { font-size: 9px; padding: 5px 8px; letter-spacing: 0.05em; }
+    #driveBtnLabel, #driveLoadBtn { }
+
+    .sidebar {
+      position: fixed; top: 0; bottom: 0; left: 0; z-index: 900;
+      width: 78vw; max-width: 300px;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.6);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-backdrop.show {
+      display: block; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55); z-index: 890;
+    }
+
+    .editor-header { padding: 12px 16px 0; }
+    .editor-header-top { flex-wrap: wrap; }
+    .editor-meta { row-gap: 8px; }
+    .entry-title-input { font-size: 22px; }
+    .editor-body { padding: 14px 16px 30px; }
+    .content-editor { font-size: 17px; }
+    .editor-toolbar { padding: 6px 16px; }
+    .gallery-bar { padding: 8px 16px; }
+    .status-bar { padding: 4px 16px; flex-wrap: wrap; row-gap: 4px; }
+    .linked-section { padding-top: 12px; }
+
+    .editor-with-bookmarks { position: relative; }
+    .bookmark-panel {
+      position: fixed; top: 0; right: 0; bottom: 0; z-index: 850;
+      box-shadow: -4px 0 24px rgba(0,0,0,0.6);
+    }
+    .bookmark-panel:not(.collapsed) { width: 210px; }
+
+    .map-toolbar { padding: 8px 10px; }
+    .map-viewport { touch-action: none; }
+
+    .modal { padding: 18px; width: 92vw; }
+    .type-grid { grid-template-columns: 1fr; }
+
+    .pin-popup { width: 88vw; max-width: 320px; }
+  }
+
   /* LOGIN SCREEN */
   #loginScreen {
     position: fixed; inset: 0; z-index: 5000;
@@ -319,6 +375,14 @@
   }
   .bookmark-item:hover .bookmark-item-del { opacity: 0.6; }
   .bookmark-item-del:hover { opacity: 1 !important; }
+
+  .bookmark-item-link {
+    opacity: 0; background: transparent; border: none; color: var(--gold2);
+    cursor: pointer; font-size: 10px; padding: 1px 2px; flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+  .bookmark-item:hover .bookmark-item-link { opacity: 0.6; }
+  .bookmark-item-link:hover { opacity: 1 !important; }
 
   .bookmark-add-row {
     padding: 8px 12px; border-top: 1px solid var(--border); flex-shrink: 0;
@@ -452,6 +516,7 @@
 
 <!-- APP -->
 <div class="topbar">
+  <button class="btn sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()" title="Menu">☰</button>
   <div class="logo">⚔ WorldForge</div>
   <div class="world-title-wrap">
     <span class="world-title-label">World:</span>
@@ -469,7 +534,8 @@
 </div>
 
 <div class="main">
-  <div class="sidebar">
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
+  <div class="sidebar" id="sidebarPanel">
     <div class="sidebar-search">
       <input type="text" id="searchInput" placeholder="Search entries…" oninput="filterEntries(this.value)">
     </div>
@@ -501,6 +567,7 @@
             <div class="editor-meta">
               <span id="typeBadge" class="entry-type-badge"></span>
               <input type="text" id="entryTitle" class="entry-title-input" placeholder="Entry title…" oninput="saveCurrentEntry()">
+              <button class="btn" onclick="copyEntryLink()" title="Copy a link to this entry — paste into a Google Doc">🔗 Copy Link</button>
             </div>
             <div class="tags-row" id="tagsRow">
               <input type="text" id="tagInput" class="tag-add-input" placeholder="+ tag" onkeydown="handleTagInput(event)">
@@ -578,6 +645,7 @@
         <button class="map-tool-btn" onclick="resetMapView()">⊙ Fit to Screen</button>
         <div class="toolbar-sep"></div>
         <button class="map-tool-btn" onclick="triggerMapUpload()">🖼 Replace Image</button>
+        <button class="map-tool-btn" onclick="copyEntryLink()" title="Copy a link to this map — paste into a Google Doc">🔗 Copy Link</button>
         <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
           <span class="map-status-item">📍 <span id="pinCount">0</span> pins</span>
           <button class="btn btn-danger" style="font-size:9px;padding:2px 8px" onclick="deleteCurrentEntry()">Delete Map</button>
@@ -684,6 +752,101 @@
 // ════════════════════════════════════════════
 let state = { worldName: '', entries: [], activeId: null, nextId: 1 };
 
+// ════════════════════════════════════════════
+// DEEP LINKING (e.g. links from Google Docs)
+// ════════════════════════════════════════════
+let pendingDeepLink = null;
+(function parseDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+  const e = params.get('e');
+  if (e !== null) {
+    const bm = params.get('bm');
+    pendingDeepLink = { entryId: parseInt(e, 10), bmId: bm !== null ? parseInt(bm, 10) : null };
+  }
+})();
+
+async function resolveDeepLinkTarget() {
+  if (!pendingDeepLink) return;
+  const target = pendingDeepLink;
+  let entry = state.entries.find(e => e.id === target.entryId);
+  if (entry) { openDeepLinkTarget(entry, target); return; }
+
+  // Not found in what's already loaded (typical on a device that hasn't synced yet) —
+  // try pulling the latest world from Google Drive.
+  toast('Looking for that entry in Google Drive…', 'info', 5000);
+  try {
+    const token = await getDriveToken();
+    if (!driveFileId) {
+      const file = await findDriveFile(token);
+      if (file) { driveFileId = file.id; localStorage.setItem('worldforge_driveFileId', driveFileId); }
+    }
+    if (driveFileId) {
+      const json = await downloadFromDrive(token, driveFileId);
+      const imported = JSON.parse(json);
+      if (imported.entries) {
+        state = imported; save();
+        document.getElementById('worldNameInput').value = state.worldName || '';
+        renderSidebar();
+        setDriveStatus('ok'); setTimeout(() => setDriveStatus('idle'), 2000);
+      }
+    }
+  } catch (err) {
+    toast('Could not reach Google Drive: ' + err.message, 'err', 6000);
+  }
+
+  entry = state.entries.find(e => e.id === target.entryId);
+  if (entry) { openDeepLinkTarget(entry, target); }
+  else { toast('That entry could not be found — it may not be synced yet.', 'err', 6000); }
+}
+
+function openDeepLinkTarget(entry, target) {
+  openEntry(entry.id);
+  closeSidebarIfMobile();
+  if (target.bmId !== null && entry.type !== 'map') {
+    setTimeout(() => jumpToBookmark(target.bmId), 200);
+  }
+  pendingDeepLink = null;
+}
+
+// Build and copy a shareable link to the current entry (optionally a specific section).
+// Paste this into a Google Doc via Insert > Link to jump straight back into WorldForge.
+function copyEntryLink(bmId) {
+  const entry = state.entries.find(e => e.id === state.activeId);
+  if (!entry) return;
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.searchParams.set('e', entry.id);
+  if (bmId !== undefined && bmId !== null) url.searchParams.set('bm', bmId);
+  const text = url.toString();
+  const done = () => toast((bmId !== undefined && bmId !== null) ? 'Section link copied' : 'Entry link copied', 'ok');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); done(); } catch (e) { toast('Could not copy link', 'err'); }
+  document.body.removeChild(ta);
+}
+
+// ════════════════════════════════════════════
+// MOBILE SIDEBAR DRAWER
+// ════════════════════════════════════════════
+function toggleSidebar() {
+  document.getElementById('sidebarPanel').classList.toggle('open');
+  document.getElementById('sidebarBackdrop').classList.toggle('show');
+}
+function closeSidebarIfMobile() {
+  if (window.innerWidth <= 760) {
+    document.getElementById('sidebarPanel').classList.remove('open');
+    document.getElementById('sidebarBackdrop').classList.remove('show');
+  }
+}
+
 const TYPES = {
   character: { label: 'Character', badge: 'badge-character', icon: '⚔',  placeholder: 'Describe this character — their appearance, personality, history, motivations, relationships…' },
   location:  { label: 'Location',  badge: 'badge-location',  icon: '🗺',  placeholder: 'Describe this place — geography, atmosphere, history, inhabitants, secrets…' },
@@ -717,7 +880,7 @@ let authedEmail = null;
 
 function initAuthGate() {
   // Check if already signed in this session
-  const cached = sessionStorage.getItem('wf_authed_email');
+  const cached = localStorage.getItem('wf_authed_email');
   if (cached && isEmailAllowed(cached)) {
     authedEmail = cached;
     grantAccess();
@@ -749,7 +912,7 @@ function handleAuthCredential(response) {
     const email = payload.email;
     if (isEmailAllowed(email)) {
       authedEmail = email;
-      sessionStorage.setItem('wf_authed_email', email);
+      localStorage.setItem('wf_authed_email', email);
       grantAccess();
     } else {
       document.getElementById('loginError').classList.remove('hidden');
@@ -772,7 +935,7 @@ function isEmailAllowed(email) {
 function grantAccess() {
   document.getElementById('loginScreen').remove();
   init();
-  loadFromDriveOnStartup();
+  loadFromDriveOnStartup().then(resolveDeepLinkTarget);
   setTimeout(initGIS, 500);
 }
 
@@ -827,7 +990,7 @@ function renderSidebar(filter = '') {
         item.dataset.id = e.id;
         item.innerHTML = `<span class="item-name">${escHtml(e.title||'(Untitled)')}</span>
           <button class="item-delete" onclick="event.stopPropagation();deleteEntry(${e.id})">✕</button>`;
-        item.addEventListener('click', () => openEntry(e.id));
+        item.addEventListener('click', () => { openEntry(e.id); closeSidebarIfMobile(); });
         list.appendChild(item);
       });
       section.appendChild(list);
@@ -1074,8 +1237,8 @@ function initGIS() {
       if (resp.error) {
         if (gisReject) gisReject(new Error(resp.error));
       } else {
-        sessionStorage.setItem('wf_gtoken', resp.access_token);
-        sessionStorage.setItem('wf_gtoken_exp', Date.now() + (resp.expires_in||3599)*1000 - 60000);
+        localStorage.setItem('wf_gtoken', resp.access_token);
+        localStorage.setItem('wf_gtoken_exp', Date.now() + (resp.expires_in||3599)*1000 - 60000);
         if (gisResolve) gisResolve(resp.access_token);
       }
       gisResolve = null; gisReject = null;
@@ -1084,8 +1247,8 @@ function initGIS() {
 }
 
 async function getDriveToken() {
-  const stored = sessionStorage.getItem('wf_gtoken');
-  const exp    = parseInt(sessionStorage.getItem('wf_gtoken_exp')||'0');
+  const stored = localStorage.getItem('wf_gtoken');
+  const exp    = parseInt(localStorage.getItem('wf_gtoken_exp')||'0');
   if (stored && Date.now() < exp) return stored;
 
   // Lazy-init GIS
@@ -1398,8 +1561,8 @@ async function loadFromDriveOnStartup() {
 
     // Request token without prompting — if user already granted access this session
     // it will succeed silently; if not, skip (don't force a popup on startup)
-    const stored = sessionStorage.getItem('wf_gtoken');
-    const exp    = parseInt(sessionStorage.getItem('wf_gtoken_exp')||'0');
+    const stored = localStorage.getItem('wf_gtoken');
+    const exp    = parseInt(localStorage.getItem('wf_gtoken_exp')||'0');
     if (!stored || Date.now() >= exp) { setDriveStatus('idle'); return; }
 
     const token = stored;
@@ -1550,6 +1713,65 @@ function initMapViewport() {
     pendingPinY=(e.clientY-r.top -mapOffsetY)/mapScale;
     editingPinId=null;
     openPinModal(null);
+  });
+
+  // ── Touch support (mobile pan / pinch-zoom / tap-to-place-pin) ──
+  let touchPanning=false, touchPanStartX=0, touchPanStartY=0;
+  let pinchStartDist=null, pinchStartScale=1, pinchMidX=0, pinchMidY=0, pinchStartOffX=0, pinchStartOffY=0;
+  let touchMoved=false;
+
+  vp.addEventListener('touchstart',e=>{
+    if (mapTool!=='pan') return;
+    touchMoved=false;
+    if (e.touches.length===1) {
+      touchPanning=true;
+      touchPanStartX=e.touches[0].clientX; touchPanStartY=e.touches[0].clientY;
+      panStartOffX=mapOffsetX; panStartOffY=mapOffsetY;
+    } else if (e.touches.length===2) {
+      touchPanning=false;
+      const [t1,t2]=e.touches;
+      pinchStartDist=Math.hypot(t2.clientX-t1.clientX,t2.clientY-t1.clientY);
+      pinchStartScale=mapScale;
+      const r=vp.getBoundingClientRect();
+      pinchMidX=(t1.clientX+t2.clientX)/2-r.left;
+      pinchMidY=(t1.clientY+t2.clientY)/2-r.top;
+      pinchStartOffX=mapOffsetX; pinchStartOffY=mapOffsetY;
+    }
+  },{passive:true});
+
+  vp.addEventListener('touchmove',e=>{
+    if (mapTool!=='pan') return;
+    if (e.touches.length===1 && touchPanning) {
+      e.preventDefault(); touchMoved=true;
+      mapOffsetX=panStartOffX+(e.touches[0].clientX-touchPanStartX);
+      mapOffsetY=panStartOffY+(e.touches[0].clientY-touchPanStartY);
+      applyTransform();
+    } else if (e.touches.length===2 && pinchStartDist) {
+      e.preventDefault(); touchMoved=true;
+      const [t1,t2]=e.touches;
+      const dist=Math.hypot(t2.clientX-t1.clientX,t2.clientY-t1.clientY);
+      const f=dist/pinchStartDist;
+      mapScale=Math.min(Math.max(pinchStartScale*f,0.05),12);
+      mapOffsetX=pinchMidX-(pinchMidX-pinchStartOffX)*f;
+      mapOffsetY=pinchMidY-(pinchMidY-pinchStartOffY)*f;
+      applyTransform(); updateZoomLabel();
+    }
+  },{passive:false});
+
+  vp.addEventListener('touchend',e=>{
+    touchPanning=false; pinchStartDist=null;
+    if (mapTool==='pin' && !touchMoved && e.changedTouches.length===1 && e.touches.length===0) {
+      const entry=state.entries.find(x=>x.id===state.activeId);
+      if (!entry||!entry.mapImage) return;
+      const t=e.changedTouches[0];
+      if (t.target.closest('.map-pin')||t.target.closest('.pin-popup')) return;
+      const r=vp.getBoundingClientRect();
+      pendingPinX=(t.clientX-r.left-mapOffsetX)/mapScale;
+      pendingPinY=(t.clientY-r.top -mapOffsetY)/mapScale;
+      editingPinId=null;
+      openPinModal(null);
+    }
+    touchMoved=false;
   });
 }
 
@@ -1742,7 +1964,7 @@ const DEFAULT_BOOKMARKS = {
   map:       []
 };
 
-let bookmarkPanelCollapsed = false;
+let bookmarkPanelCollapsed = window.innerWidth <= 760;
 
 function getBookmarks(entry) {
   if (!entry.bookmarks) {
@@ -1784,6 +2006,7 @@ function renderBookmarkPanel(entry) {
     item.dataset.bmId = bm.id;
     item.innerHTML = `<span class="bookmark-dot"></span>
       <span class="bookmark-item-label">${escHtml(bm.name)}</span>
+      <button class="bookmark-item-link" onclick="event.stopPropagation();copyEntryLink(${bm.id})" title="Copy link to this section">🔗</button>
       <button class="bookmark-item-del" onclick="event.stopPropagation();removeBookmark(${bm.id})" title="Remove">✕</button>`;
     item.addEventListener('click', () => jumpToBookmark(bm.id));
     list.appendChild(item);
