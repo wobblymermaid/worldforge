@@ -41,6 +41,16 @@
   .btn-drive:hover { border-color: #5aab78; background: rgba(90,171,120,0.08); color: #7acc96; }
   .btn-drive.syncing { opacity: 0.6; pointer-events: none; }
 
+  /* SYNC INDICATOR (autosave status) */
+  .sync-indicator {
+    font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 0.08em;
+    white-space: nowrap; padding: 4px 6px; cursor: default; user-select: none;
+  }
+  .sync-indicator.synced  { color: #7acc96; }
+  .sync-indicator.dirty   { color: var(--gold2); }
+  .sync-indicator.nodrive { color: var(--text3); }
+  .sync-indicator.syncing { color: var(--gold2); animation: blink 0.9s infinite alternate; }
+
   /* TOAST */
   #toast {
     position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
@@ -227,6 +237,7 @@
     .world-title-label { display: none; }
     .topbar-actions { gap: 4px; }
     .topbar-actions .btn { font-size: 9px; padding: 5px 8px; letter-spacing: 0.05em; }
+    .sync-indicator { font-size: 8px; padding: 4px 3px; }
     #driveBtnLabel, #driveLoadBtn { }
 
     .sidebar {
@@ -529,6 +540,7 @@
     <button class="btn btn-drive" id="driveBtn" onclick="saveToDrive()" title="Save world to Google Drive">
       <span class="drive-dot" id="driveDot"></span><span id="driveBtnLabel">Save to Drive</span>
     </button>
+    <span class="sync-indicator synced" id="syncIndicator" title="Nothing to back up yet">✓ Saved to Drive</span>
     <button class="btn btn-gold" onclick="openNewModal()">+ New Entry</button>
   </div>
 </div>
@@ -753,6 +765,67 @@
 let state = { worldName: '', entries: [], activeId: null, nextId: 1 };
 
 // ════════════════════════════════════════════
+// AUTO-SAVE TO DRIVE
+// ════════════════════════════════════════════
+let isDirty = false, isSyncing = false, lastAutoSaved = null, skipDirtyMark = false;
+
+function updateSaveIndicator() {
+  const el = document.getElementById('syncIndicator');
+  if (!el) return;
+  if (isSyncing) {
+    el.className = 'sync-indicator syncing';
+    el.textContent = '⟳ Saving…';
+    el.title = 'Backing up to Google Drive';
+  } else if (isDirty) {
+    if (getDriveTokenSilent()) {
+      el.className = 'sync-indicator dirty';
+      el.textContent = '● Unsaved changes';
+      el.title = 'Will back up to Drive automatically within a minute';
+    } else {
+      el.className = 'sync-indicator nodrive';
+      el.textContent = '● Unsaved (not connected)';
+      el.title = 'Click "Save to Drive" once to connect — after that, changes back up automatically';
+    }
+  } else {
+    el.className = 'sync-indicator synced';
+    el.textContent = '✓ Saved to Drive';
+    el.title = lastAutoSaved ? ('Last backed up ' + new Date(lastAutoSaved).toLocaleTimeString()) : 'Nothing to back up yet';
+  }
+}
+
+// Returns a cached Drive token only if we already have a valid one — never pops up a prompt.
+// Autosave must never surprise you with an auth popup while you're mid-sentence.
+function getDriveTokenSilent() {
+  const stored = localStorage.getItem('wf_gtoken');
+  const exp = parseInt(localStorage.getItem('wf_gtoken_exp') || '0');
+  return (stored && Date.now() < exp) ? stored : null;
+}
+
+async function autoSaveToDrive() {
+  if (!isDirty || isSyncing) return;
+  const token = getDriveTokenSilent();
+  if (!token) { updateSaveIndicator(); return; } // no valid session — wait for a manual Drive action to (re)connect
+  isSyncing = true; updateSaveIndicator(); setDriveStatus('busy');
+  try {
+    const json = JSON.stringify(state, null, 2);
+    await uploadToDrive(token, json);
+    isDirty = false; lastAutoSaved = Date.now();
+    setDriveStatus('ok'); setTimeout(() => setDriveStatus('idle'), 2000);
+  } catch (err) {
+    setDriveStatus('err'); setTimeout(() => setDriveStatus('idle'), 4000);
+  } finally {
+    isSyncing = false; updateSaveIndicator();
+  }
+}
+
+// Heartbeat: catches you even if you keep typing continuously.
+setInterval(() => { if (isDirty) autoSaveToDrive(); }, 45000);
+// Catches the "closed the laptop / switched apps / walked away" moment.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && isDirty) autoSaveToDrive(); });
+window.addEventListener('blur', () => { if (isDirty) autoSaveToDrive(); });
+window.addEventListener('pagehide', () => { if (isDirty) autoSaveToDrive(); });
+
+// ════════════════════════════════════════════
 // DEEP LINKING (e.g. links from Google Docs)
 // ════════════════════════════════════════════
 let pendingDeepLink = null;
@@ -784,7 +857,8 @@ async function resolveDeepLinkTarget() {
       const json = await downloadFromDrive(token, driveFileId);
       const imported = JSON.parse(json);
       if (imported.entries) {
-        state = imported; save();
+        skipDirtyMark = true; state = imported; save();
+        isDirty = false; lastAutoSaved = Date.now(); updateSaveIndicator();
         document.getElementById('worldNameInput').value = state.worldName || '';
         renderSidebar();
         setDriveStatus('ok'); setTimeout(() => setDriveStatus('idle'), 2000);
@@ -952,11 +1026,15 @@ function init() {
     if (e) openEntry(e.id);
   }
   initMapViewport();
+  updateSaveIndicator();
 }
 
 function save() {
   state.worldName = document.getElementById('worldNameInput').value;
   localStorage.setItem('worldforge_v3', JSON.stringify(state));
+  if (skipDirtyMark) { skipDirtyMark = false; return; }
+  isDirty = true;
+  updateSaveIndicator();
 }
 
 // ════════════════════════════════════════════
@@ -1453,7 +1531,8 @@ async function loadDriveFileById(token, fileId, fileName) {
     const json = await downloadFromDrive(token, fileId);
     const imported = JSON.parse(json);
     if (!imported.entries) throw new Error('Not a valid WorldForge file.');
-    state = imported; save();
+    skipDirtyMark = true; state = imported; save();
+    isDirty = false; lastAutoSaved = Date.now(); updateSaveIndicator();
     driveFileId = fileId;
     localStorage.setItem('worldforge_driveFileId', fileId);
     document.getElementById('worldNameInput').value = state.worldName || '';
@@ -1528,12 +1607,15 @@ async function downloadFromDrive(token, fileId) {
 
 // ── SAVE TO DRIVE (button handler) ──
 async function saveToDrive() {
+  if (isSyncing) return;
+  isSyncing = true; updateSaveIndicator();
   setDriveStatus('busy');
   document.getElementById('driveBtnLabel').textContent = 'Saving…';
   try {
     const token = await getDriveToken();
     const json  = JSON.stringify(state, null, 2);
     await uploadToDrive(token, json);
+    isDirty = false; lastAutoSaved = Date.now();
     setDriveStatus('ok');
     document.getElementById('driveBtnLabel').textContent = 'Saved ✓';
     toast('World saved to Google Drive', 'ok');
@@ -1548,6 +1630,8 @@ async function saveToDrive() {
       toast('Drive save failed: ' + err.message, 'err');
     }
     setTimeout(()=>setDriveStatus('idle'), 4000);
+  } finally {
+    isSyncing = false; updateSaveIndicator();
   }
 }
 
@@ -1587,7 +1671,8 @@ async function loadFromDriveOnStartup() {
     const json = await downloadFromDrive(token, driveFileId);
     const imported = JSON.parse(json);
     if (imported.entries) {
-      state = imported; save();
+      skipDirtyMark = true; state = imported; save();
+      isDirty = false; lastAutoSaved = Date.now(); updateSaveIndicator();
       document.getElementById('worldNameInput').value = state.worldName||'';
       state.activeId = null; showShell('emptyState'); renderSidebar();
       setDriveStatus('ok');
