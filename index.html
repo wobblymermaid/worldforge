@@ -762,7 +762,7 @@
 // ════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════
-let state = { worldName: '', entries: [], activeId: null, nextId: 1 };
+let state = { worldName: '', entries: [], activeId: null, nextId: 1, lastModified: 0 };
 
 // ════════════════════════════════════════════
 // AUTO-SAVE TO DRIVE
@@ -856,7 +856,7 @@ async function resolveDeepLinkTarget() {
     if (driveFileId) {
       const json = await downloadFromDrive(token, driveFileId);
       const imported = JSON.parse(json);
-      if (imported.entries) {
+      if (imported.entries && (imported.lastModified || 0) > (state.lastModified || 0)) {
         skipDirtyMark = true; state = imported; save();
         isDirty = false; lastAutoSaved = Date.now(); updateSaveIndicator();
         document.getElementById('worldNameInput').value = state.worldName || '';
@@ -1031,6 +1031,7 @@ function init() {
 
 function save() {
   state.worldName = document.getElementById('worldNameInput').value;
+  state.lastModified = Date.now();
   localStorage.setItem('worldforge_v3', JSON.stringify(state));
   if (skipDirtyMark) { skipDirtyMark = false; return; }
   isDirty = true;
@@ -1671,6 +1672,12 @@ async function loadFromDriveOnStartup() {
     const json = await downloadFromDrive(token, driveFileId);
     const imported = JSON.parse(json);
     if (imported.entries) {
+      if ((imported.lastModified || 0) <= (state.lastModified || 0)) {
+        // What's already on this device is as new or newer than Drive — don't risk
+        // silently clobbering local edits that haven't been backed up yet.
+        setDriveStatus('idle');
+        return;
+      }
       skipDirtyMark = true; state = imported; save();
       isDirty = false; lastAutoSaved = Date.now(); updateSaveIndicator();
       document.getElementById('worldNameInput').value = state.worldName||'';
